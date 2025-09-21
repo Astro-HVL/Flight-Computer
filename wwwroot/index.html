@@ -1,0 +1,65 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Telemetry Dashboard</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/7.0.5/signalr.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; margin: 16px; }
+    #charts { display:flex; gap:16px; flex-wrap:wrap; }
+    canvas { background:#ffffff; border:1px solid #ddd; }
+    #statusPanel { margin:12px 0; padding:8px; border:1px solid #ddd; background:#fafafa; max-width:1200px; }
+    table td { padding:4px 8px; }
+    #debug { height:140px; overflow:auto; border:1px solid #eee; padding:8px; white-space:pre-wrap; background:#f8f8f8;}
+  </style>
+</head>
+<body>
+  <h1>Test dashboard</h1>
+
+  <div id="statusPanel">
+    <strong>Latest telemetry</strong>
+    <table id="latestTable" style="width:100%; font-family:monospace; margin-top:6px;">
+      <tr><td>Time (s)</td><td id="val_time">-</td><td>Seq</td><td id="val_seq">-</td></tr>
+      <tr><td>ax (g)</td><td id="val_ax">-</td><td>ay (g)</td><td id="val_ay">-</td></tr>
+      <tr><td>az (g)</td><td id="val_az">-</td><td>Pitch</td><td id="val_pitch">-</td></tr>
+      <tr><td>Roll</td><td id="val_roll">-</td><td>Yaw</td><td id="val_yaw">-</td></tr>
+      <tr><td>Temp (°C)</td><td id="val_temp">-</td><td>Vel (m/s)</td><td id="val_vel">-</td></tr>
+      <tr><td>Press</td><td id="val_press">-</td><td>Alt (m)</td><td id="val_alt">-</td></tr>
+      <tr><td>Lat</td><td id="val_lat">-</td><td>Lon</td><td id="val_lon">-</td></tr>
+    </table>
+  </div>
+
+  <div id="charts">
+    <div>
+      <canvas id="velChart" width="700" height="320"></canvas>
+      <div style="text-align:center;">Velocity (m/s)</div>
+    </div>
+
+    <div>
+      <canvas id="altChart" width="700" height="320"></canvas>
+      <div style="text-align:center;">Altitude (m)</div>
+    </div>
+
+    <div>
+      <canvas id="accChart" width="700" height="320"></canvas>
+      <div style="text-align:center;">Acceleration (g)</div>
+    </div>
+
+    <div>
+      <canvas id="orientChart" width="450" height="320"></canvas>
+      <div style="text-align:center;">Pitch / Roll / Yaw (°)</div>
+    </div>
+
+    <div>
+      <canvas id="envChart" width="450" height="320"></canvas>
+      <div style="text-align:center;">Temp (°C) / Pressure</div>
+    </div>
+  </div>
+
+  <h3>Debug (raw)</h3>
+  <div id="debug"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
