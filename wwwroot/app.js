@@ -36,7 +36,7 @@ function createCharts(){
     data: {
       labels: [],
       datasets: [
-        { label:'Vel (m/s)', data:[], borderColor:'goldenrod', fill:false, yAxisID:'y_vel', pointRadius:1 }
+        { label:'Velocity (m/s)', data:[], borderColor:'goldenrod', fill:false, yAxisID:'y_vel', pointRadius:1 }
       ]
     },
     options: { animation:false, responsive:false, maintainAspectRatio: true, scales:{ x:{ display:true, title:{display:true, text:'Samples'} } } }
@@ -93,8 +93,8 @@ function createCharts(){
     data: {
       labels: [],
       datasets: [
-        { label:'Temp (\u00B0C)', data:[], borderColor:'brown', fill:false, yAxisID:'y_temp', pointRadius:1 },
-        { label:'Press', data:[], borderColor:'gray', fill:false, yAxisID:'y_press', pointRadius:1 }
+        { label:'Temperature (\u00B0C)', data:[], borderColor:'brown', fill:false, yAxisID:'y_temp', pointRadius:1 },
+        { label:'Pressure (atm)', data:[], borderColor:'gray', fill:false, yAxisID:'y_press', pointRadius:1 }
       ]
     },
     options: {
@@ -102,7 +102,7 @@ function createCharts(){
       responsive:false,
       scales: {
         y_temp: { type:'linear', position:'left', title:{display:true, text:'Temp (\u00B0C)'} },
-        y_press:{ type:'linear', position:'right', title:{display:true, text:'Pressure'}, grid:{ drawOnChartArea:false } },
+        y_press:{ type:'linear', position:'right', title:{display:true, text:'Pressure (atm)'}, grid:{ drawOnChartArea:false } },
       }
     }
   });
