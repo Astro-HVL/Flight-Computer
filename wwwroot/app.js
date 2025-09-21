@@ -29,83 +29,193 @@ const valAlt  = document.getElementById('val_alt');
 let velChart, altChart, accChart, orientChart, envChart;
 function createCharts(){
   
-  // velocity chart
-  const ctx1 = document.getElementById('velChart').getContext('2d');
-  velChart = new Chart(ctx1, {
-    type: 'line',
-    data: {
-      labels: [],
-      datasets: [
-        { label:'Velocity (m/s)', data:[], borderColor:'goldenrod', fill:false, yAxisID:'y_vel', pointRadius:1 }
-      ]
-    },
-    options: { animation:false, responsive:false, maintainAspectRatio: true, scales:{ x:{ display:true, title:{display:true, text:'Samples'} } } }
-  });
-
-  // alt chart
-  const ctx2 = document.getElementById('altChart').getContext('2d');
-  altChart = new Chart(ctx2, {
-    type: 'line',
-    data: {
-      labels: [],
-      datasets: [
-        { label:'Altitude (m)', data:[], borderColor:'Magenta', fill:false, yAxisID:'y_alt', pointRadius:1 }
-      ]
-    },
-      options: { animation: false, responsive: false, maintainAspectRatio: true, scales:{ x:{ display:true, title:{display:true, text:'Samples'} } } }
-  });
-
-  // accel chart
-  const ctx3 = document.getElementById('accChart').getContext('2d');
-  accChart = new Chart(ctx3, {
-    type: 'line',
-    data: {
-      labels: [],
-      datasets: [
-        { label: 'ax (g)', data: [], borderColor:'red', fill:false, pointRadius:1 },
-        { label: 'ay (g)', data: [], borderColor:'green', fill:false, pointRadius:1 },
-        { label: 'az (g)', data: [], borderColor:'blue', fill:false, pointRadius:1 }
-      ]
-    },
-      options: { animation: false, responsive: false, maintainAspectRatio: true, scales:{ x:{ display:true, title:{display:true, text:'Samples'} } } }
-  });
-
-
-  // orientation
-  const ctx4 = document.getElementById('orientChart').getContext('2d');
-  orientChart = new Chart(ctx4, {
-    type: 'line',
-    data: {
-      labels: [],
-      datasets: [
-        { label:'Pitch (\u00B0)', data:[], borderColor:'orange', fill:false, pointRadius:1 },
-        { label:'Roll (\u00B0)',  data:[], borderColor:'purple', fill:false, pointRadius:1 },
-        { label:'Yaw (\u00B0)',   data:[], borderColor:'teal', fill:false, pointRadius:1 }
-      ]
-    },
-      options: { animation: false, responsive: false, maintainAspectRatio: true }
-  });
-
-  // environment: temp, press
-  const ctx5 = document.getElementById('envChart').getContext('2d');
-  envChart = new Chart(ctx5, {
-    type: 'line',
-    data: {
-      labels: [],
-      datasets: [
-        { label:'Temperature (\u00B0C)', data:[], borderColor:'brown', fill:false, yAxisID:'y_temp', pointRadius:1 },
-        { label:'Pressure (atm)', data:[], borderColor:'gray', fill:false, yAxisID:'y_press', pointRadius:1 }
-      ]
-    },
-    options: {
-      animation:false,
-      responsive:false,
-      scales: {
-        y_temp: { type:'linear', position:'left', title:{display:true, text:'Temp (\u00B0C)'} },
-        y_press:{ type:'linear', position:'right', title:{display:true, text:'Pressure (atm)'}, grid:{ drawOnChartArea:false } },
+// velocity chart
+const ctx1 = document.getElementById('velChart').getContext('2d');
+velChart = new Chart(ctx1, {
+  type: 'line',
+  data: {
+    labels: [], // fylles med sekunder
+    datasets: [
+      { 
+        label:'Velocity (m/s)', 
+        data:[], 
+        borderColor:'goldenrod', 
+        borderWidth: 2,
+        fill:false, 
+        yAxisID:'y_vel', 
+        pointRadius:1 
       }
-    }
-  });
+    ]
+  },
+  options: { 
+    animation:false, 
+    responsive:false, 
+    maintainAspectRatio: true, 
+    scales:{ 
+      x:{ 
+        display:true, 
+        title:{ display:true, text:'Time (s)', font:{ size:20 } },
+        ticks: { font: { size: 14 }, callback: function(value, index) {
+        const label = this.getLabelForValue(index);
+        if (!label) return '';
+          return parseFloat(label); 
+        }
+      }
+      },
+      y_vel:{
+        title:{ display:true, text:'Velocity (m/s)', font:{ size:20 } },
+        ticks:{ font:{ size:14 } }
+      }
+    },
+    plugins:{ legend:{ labels:{ font:{ size:20 } } } }
+  }
+});
+
+// altitude chart
+const ctx2 = document.getElementById('altChart').getContext('2d');
+altChart = new Chart(ctx2, {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [
+      { 
+        label:'Altitude (m)', 
+        data:[], 
+        borderColor:'Magenta', 
+        fill:false, 
+        yAxisID:'y_alt', 
+        pointRadius:1 
+      }
+    ]
+  },
+  options: { 
+    animation:false, 
+    responsive:false, 
+    maintainAspectRatio: true, 
+    scales:{ 
+      x:{ 
+        display:true, 
+        title:{ display:true, text:'Time (s)', font:{ size:20 } },
+        ticks: { font: { size: 14 }, callback: function(value, index) {
+        const label = this.getLabelForValue(index);
+        if (!label) return '';
+          return parseFloat(label); 
+        }
+      }
+      },
+      y_alt:{
+        title:{ display:true, text:'Altitude (m)', font:{ size:20 } },
+        ticks:{ font:{ size:14 } }
+      }
+    },
+    plugins:{ legend:{ labels:{ font:{ size:20 } } } }
+  }
+});
+
+// acceleration chart
+const ctx3 = document.getElementById('accChart').getContext('2d');
+accChart = new Chart(ctx3, {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [
+      { label: 'ax (g)', data: [], borderColor:'red', fill:false, pointRadius:1 },
+      { label: 'ay (g)', data: [], borderColor:'green', fill:false, pointRadius:1 },
+      { label: 'az (g)', data: [], borderColor:'blue', fill:false, pointRadius:1 }
+    ]
+  },
+  options: { 
+    animation:false, 
+    responsive:false, 
+    maintainAspectRatio: true, 
+    scales:{ 
+      x:{ 
+        display:true, 
+        title:{ display:true, text:'Time (s)', font:{ size:20 } },
+        ticks: { font: { size: 14 }, callback: function(value, index) {
+        const label = this.getLabelForValue(index);
+        if (!label) return '';
+          return parseFloat(label); 
+        }
+      }
+      },
+    },
+    plugins:{ legend:{ labels:{ font:{ size:20 } } } }
+  }
+});
+
+// orientation chart
+const ctx4 = document.getElementById('orientChart').getContext('2d');
+orientChart = new Chart(ctx4, {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [
+      { label:'Pitch (\u00B0)', data:[], borderColor:'orange', fill:false, pointRadius:1 },
+      { label:'Roll (\u00B0)',  data:[], borderColor:'purple', fill:false, pointRadius:1 },
+      { label:'Yaw (\u00B0)',   data:[], borderColor:'teal', fill:false, pointRadius:1 }
+    ]
+  },
+  options: { 
+    animation:false, 
+    responsive:false, 
+    maintainAspectRatio: true,
+    scales:{
+      x:{ 
+        display:true, 
+        title:{ display:true, text:'Time (s)', font:{ size:20 } },
+        ticks: { font: { size: 14 }, callback: function(value, index) {
+        const label = this.getLabelForValue(index);
+        if (!label) return '';
+          return parseFloat(label); 
+        }
+      }
+      },
+    },
+    plugins:{ legend:{ labels:{ font:{ size:20 } } } }
+  }
+});
+
+// environment chart
+const ctx5 = document.getElementById('envChart').getContext('2d');
+envChart = new Chart(ctx5, {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [
+      { label:'Temperature (\u00B0C)', data:[], borderColor:'brown', fill:false, yAxisID:'y_temp', pointRadius:1 },
+      { label:'Pressure (atm)', data:[], borderColor:'gray', fill:false, yAxisID:'y_press', pointRadius:1 }
+    ]
+  },
+  options: {
+    animation:false,
+    responsive:false,
+    scales: {
+      x:{ 
+        display:true, 
+        title:{ display:true, text:'Time (s)', font:{ size:20 } },
+        ticks: { font: { size: 14 }, callback: function(value, index) {
+        const label = this.getLabelForValue(index);
+        if (!label) return '';
+          return parseFloat(label); 
+        }
+      }
+      },
+      y_temp:{ 
+        type:'linear', 
+        position:'left', 
+        title:{ display:true, text:'Temp (\u00B0C)', font:{ size:20 } }
+      },
+      y_press:{ 
+        type:'linear', 
+        position:'right', 
+        title:{ display:true, text:'Pressure (atm)', font:{ size:20 } }, 
+        grid:{ drawOnChartArea:false } 
+      }
+    },
+    plugins:{ legend:{ labels:{ font:{ size:20 } } } }
+  }
+});
 }
 
 function updateLatest(tMs, seq, ax, ay, az, pitch, roll, yaw, temp, vel, press, lat, lon, alt) {
@@ -127,39 +237,56 @@ function updateLatest(tMs, seq, ax, ay, az, pitch, roll, yaw, temp, vel, press, 
 
 function pushToCharts(ax, ay, az, pitch, roll, yaw, temp, vel, press, alt) {
   const maxPoints = 250;
+  const tLabel = valTime.textContent || '';  // bruk tid fra mikrokontrolleren
+
   // velocity
-  velChart.data.labels.push('');
+  velChart.data.labels.push(tLabel);
   velChart.data.datasets[0].data.push(vel);
-  if (velChart.data.labels.length > maxPoints) { velChart.data.labels.shift(); velChart.data.datasets.forEach(ds => ds.data.shift()); }
+  if (velChart.data.labels.length > maxPoints) { 
+    velChart.data.labels.shift(); 
+    velChart.data.datasets.forEach(ds => ds.data.shift()); 
+  }
   velChart.update('none');
 
-  // alt
-  altChart.data.labels.push('');
+  // altitude
+  altChart.data.labels.push(tLabel);
   altChart.data.datasets[0].data.push(alt);
-  if (altChart.data.labels.length > maxPoints) { altChart.data.labels.shift(); altChart.data.datasets.forEach(ds => ds.data.shift()); }
+  if (altChart.data.labels.length > maxPoints) { 
+    altChart.data.labels.shift(); 
+    altChart.data.datasets.forEach(ds => ds.data.shift()); 
+  }
   altChart.update('none');
 
   // acceleration
-  accChart.data.labels.push('');
+  accChart.data.labels.push(tLabel);
   accChart.data.datasets[0].data.push(ax);
   accChart.data.datasets[1].data.push(ay);
   accChart.data.datasets[2].data.push(az);
-  if (accChart.data.labels.length > maxPoints) { accChart.data.labels.shift(); accChart.data.datasets.forEach(ds => ds.data.shift()); }
+  if (accChart.data.labels.length > maxPoints) { 
+    accChart.data.labels.shift(); 
+    accChart.data.datasets.forEach(ds => ds.data.shift()); 
+  }
   accChart.update('none');
 
   // orientation
-  orientChart.data.labels.push('');
+  orientChart.data.labels.push(tLabel);
   orientChart.data.datasets[0].data.push(pitch);
   orientChart.data.datasets[1].data.push(roll);
   orientChart.data.datasets[2].data.push(yaw);
-  if (orientChart.data.labels.length > maxPoints) { orientChart.data.labels.shift(); orientChart.data.datasets.forEach(ds => ds.data.shift()); }
+  if (orientChart.data.labels.length > maxPoints) { 
+    orientChart.data.labels.shift(); 
+    orientChart.data.datasets.forEach(ds => ds.data.shift()); 
+  }
   orientChart.update('none');
 
-  // env
-  envChart.data.labels.push('');
+  // environment
+  envChart.data.labels.push(tLabel);
   envChart.data.datasets[0].data.push(temp);
   envChart.data.datasets[1].data.push(press);
-  if (envChart.data.labels.length > maxPoints) { envChart.data.labels.shift(); envChart.data.datasets.forEach(ds => ds.data.shift()); }
+  if (envChart.data.labels.length > maxPoints) { 
+    envChart.data.labels.shift(); 
+    envChart.data.datasets.forEach(ds => ds.data.shift()); 
+  }
   envChart.update('none');
 }
 
