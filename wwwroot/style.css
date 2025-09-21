@@ -1,0 +1,19 @@
+#charts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    justify-content: center; /* sentrerer radene */
+}
+
+.chart-container {
+    flex: 1 1 400px; /* vokser, krymper og starter fra 400px bredde */
+    max-width: 700px; /* maks bredde */
+    min-width: 300px; /* min-bredde for små skjermer */
+}
+
+    .chart-container canvas {
+        width: 100% !important; /* fyller containerens bredde */
+        height: auto !important; /* automatisk høyde basert på proporsjoner */
+        background: #ffffff;
+        border: 1px solid #ddd;
+    }
