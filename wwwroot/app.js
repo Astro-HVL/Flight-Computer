@@ -19,6 +19,7 @@ const valPitch= document.getElementById('val_pitch');
 const valRoll = document.getElementById('val_roll');
 const valYaw  = document.getElementById('val_yaw');
 
+
 // Visualization DOM elements (top-level)
 const pitchViz = document.getElementById('pitchViz');
 const yawViz = document.getElementById('yawViz');
@@ -26,6 +27,16 @@ const rollViz = document.getElementById('rollViz');
 const pitchValue = document.getElementById('pitchValue');
 const yawValue = document.getElementById('yawValue');
 const rollValue = document.getElementById('rollValue');
+
+// Draw default orientation figures (0 deg) on page load
+window.addEventListener('DOMContentLoaded', () => {
+  if (pitchViz) drawRocket(pitchViz.getContext('2d'), 0);
+  if (yawViz) drawRocket(yawViz.getContext('2d'), 0);
+  if (rollViz) drawRoll(rollViz.getContext('2d'), 0);
+  if (pitchValue) pitchValue.textContent = '0.00 °';
+  if (yawValue) yawValue.textContent = '0.00 °';
+  if (rollValue) rollValue.textContent = '0.00 °';
+});
 
 function drawRocket(ctx, angleDeg) {
   // Draw a simple rocket shape centered and rotated by angleDeg
@@ -357,7 +368,7 @@ function updateLatest(tMs, seq, ax, ay, az, pitch, roll, yaw, temp, vel, press, 
   valLat.textContent = (lat !== undefined ? (Number(lat)/1e6).toFixed(6) : '-');
   valLon.textContent = (lon !== undefined ? (Number(lon)/1e6).toFixed(6) : '-');
   valAlt.textContent = (alt !== undefined ? Number(alt).toFixed(0) : '-');
-  
+
   // Update chart labels with live data
   if (velChart && velChart.data && velChart.data.datasets[0]) {
     velChart.data.datasets[0].label = `Velocity: ${vel !== undefined ? Number(vel).toFixed(2) : '-'} m/s`;
@@ -383,6 +394,14 @@ function updateLatest(tMs, seq, ax, ay, az, pitch, roll, yaw, temp, vel, press, 
   }
   // Update orientation visualizations
   updateOrientationVisuals(pitch, yaw, roll);
+  // Update 3D model orientation
+  if (typeof setRocket3DRotation === 'function') {
+    setRocket3DRotation(pitch, yaw, roll);
+  }
+  // Update 3D rocket orientation if available
+  if (typeof setRocket3DRotation === 'function') {
+    setRocket3DRotation(pitch, yaw, roll);
+  }
 }
 
 function pushToCharts(ax, ay, az, pitch, roll, yaw, temp, vel, press, alt) {
@@ -479,6 +498,13 @@ connection.on("telemetry", (payload) => {
 
 async function start(){
   createCharts();
+  // Initialize 3D rocket model after DOM and three.js are ready
+  if (typeof initRocket3D === 'function') {
+    initRocket3D();
+  } else {
+    // If not yet loaded, try again shortly
+    setTimeout(() => { if (typeof initRocket3D === 'function') initRocket3D(); }, 500);
+  }
   try {
     await connection.start();
     dbg("Connected to SignalR hub");
