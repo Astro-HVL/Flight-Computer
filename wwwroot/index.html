@@ -17,7 +17,36 @@
 </head>
 <body>
   <h1>Test dashboard</h1>
+  <br>
 
+<div id="charts">
+  <div class="chart-container">
+    <canvas id="velChart"></canvas>
+    <div style="text-align:center;">Velocity (m/s)</div>
+  </div>
+
+  <div class="chart-container">
+    <canvas id="altChart"></canvas>
+    <div style="text-align:center;">Altitude (m)</div>
+  </div>
+
+  <div class="chart-container">
+    <canvas id="accChart"></canvas>
+    <div style="text-align:center;">Acceleration (g)</div>
+  </div>
+
+  <div class="chart-container">
+    <canvas id="orientChart"></canvas>
+    <div style="text-align:center;">Pitch / Roll / Yaw (°)</div>
+  </div>
+
+  <div class="chart-container">
+    <canvas id="envChart"></canvas>
+    <div style="text-align:center;">Temp (°C) / Pressure</div>
+  </div>
+</div>
+
+<br><br><br><br>
   <div id="statusPanel">
     <strong>Latest telemetry</strong>
     <table id="latestTable" style="width:100%; font-family:monospace; margin-top:6px;">
@@ -30,35 +59,7 @@
       <tr><td>Lat</td><td id="val_lat">-</td><td>Lon</td><td id="val_lon">-</td></tr>
     </table>
   </div>
-
-  <div id="charts">
-      <div class="chart-container">
-          <canvas id="velChart"></canvas>
-          <div style="text-align:center;">Velocity (m/s)</div>
-      </div>
-
-      <div class="chart-container">
-          <canvas id="altChart"></canvas>
-          <div style="text-align:center;">Altitude (m)</div>
-      </div>
-
-      <div class="chart-container">
-          <canvas id="accChart"></canvas>
-          <div style="text-align:center;">Acceleration (g)</div>
-      </div>
-
-      <div class="chart-container">
-          <canvas id="orientChart"></canvas>
-          <div style="text-align:center;">Pitch / Roll / Yaw (°)</div>
-      </div>
-
-      <div class="chart-container">
-          <canvas id="envChart"></canvas>
-          <div style="text-align:center;">Temp (°C) / Pressure</div>
-      </div>
-
-  </div>
-
+  
   <h3>Debug (raw)</h3>
   <div id="debug"></div>
 

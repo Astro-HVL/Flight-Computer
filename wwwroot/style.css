@@ -2,18 +2,30 @@
     display: flex;
     flex-wrap: wrap;
     gap: 16px;
-    justify-content: center; /* sentrerer radene */
+    justify-content: center; /* sentrerer grafene */
 }
 
 .chart-container {
-    flex: 1 1 400px; /* vokser, krymper og starter fra 400px bredde */
-    max-width: 700px; /* maks bredde */
-    min-width: 300px; /* min-bredde for små skjermer */
+    flex: 1 1 calc(33.333% - 16px);
+    max-width: 33.333%;
+    min-width: 300px;
+    box-sizing: border-box;
 }
 
-    .chart-container canvas {
-        width: 100% !important; /* fyller containerens bredde */
-        height: auto !important; /* automatisk høyde basert på proporsjoner */
-        background: #ffffff;
-        border: 1px solid #ddd;
-    }
+.chart-container canvas {
+    width: 100% !important;
+    height: auto !important;
+    background: #ffffff;
+    border: 1px solid #ddd;
+}
+
+#statusPanel {
+    margin: 24px auto;  /* horisontal auto = centrerer boksen */
+    padding: 16px;
+    border: 1px solid #ddd;
+    background: #fafafa;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    max-width: 600px;    /* maks bredde pÃ¥ boksen */
+    width: 90%;          /* fyller litt pÃ¥ smÃ¥ skjermer */
+    text-align: left;    /* beholder teksten venstrejustert */
+}

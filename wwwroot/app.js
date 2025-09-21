@@ -39,7 +39,7 @@ function createCharts(){
         { label:'Vel (m/s)', data:[], borderColor:'goldenrod', fill:false, yAxisID:'y_vel', pointRadius:1 }
       ]
     },
-    options: { animation:false, responsive:true, maintainAspectRatio: false, scales:{ x:{ display:true, title:{display:true, text:'Samples'} } } }
+    options: { animation:false, responsive:false, maintainAspectRatio: true, scales:{ x:{ display:true, title:{display:true, text:'Samples'} } } }
   });
 
   // alt chart
@@ -52,7 +52,7 @@ function createCharts(){
         { label:'Altitude (m)', data:[], borderColor:'Magenta', fill:false, yAxisID:'y_alt', pointRadius:1 }
       ]
     },
-      options: { animation: false, responsive: true, maintainAspectRatio: false, scales:{ x:{ display:true, title:{display:true, text:'Samples'} } } }
+      options: { animation: false, responsive: false, maintainAspectRatio: true, scales:{ x:{ display:true, title:{display:true, text:'Samples'} } } }
   });
 
   // accel chart
@@ -67,7 +67,7 @@ function createCharts(){
         { label: 'az (g)', data: [], borderColor:'blue', fill:false, pointRadius:1 }
       ]
     },
-      options: { animation: false, responsive: true, maintainAspectRatio: false, scales:{ x:{ display:true, title:{display:true, text:'Samples'} } } }
+      options: { animation: false, responsive: false, maintainAspectRatio: true, scales:{ x:{ display:true, title:{display:true, text:'Samples'} } } }
   });
 
 
@@ -83,7 +83,7 @@ function createCharts(){
         { label:'Yaw (\u00B0)',   data:[], borderColor:'teal', fill:false, pointRadius:1 }
       ]
     },
-      options: { animation: false, responsive: true, maintainAspectRatio: false }
+      options: { animation: false, responsive: false, maintainAspectRatio: true }
   });
 
   // environment: temp, press
