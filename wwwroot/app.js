@@ -104,7 +104,7 @@ const valLon  = document.getElementById('val_lon');
 const valAlt  = document.getElementById('val_alt');
 
 // charts
-let velChart, altChart, accChart, orientChart, envChart;
+let velChart, altChart, accChart, orientChart, tempChart, pressChart;
 function createCharts(){
   
 // velocity chart
@@ -133,8 +133,8 @@ velChart = new Chart(ctx1, {
       x:{ 
         display:true, 
         min: 0,
-        title:{ display:true, text:'Time (s)', font:{ size:20 } },
-        ticks: { font: { size: 14 }, callback: function(value, index) {
+        title:{ display:true, text:'Time (s)', font:{ size:20 }, color:'#fff' },
+        ticks: { font: { size: 14 }, color:'#fff', callback: function(value, index) {
         const label = this.getLabelForValue(index);
         if (!label) return '';
           return parseFloat(label); 
@@ -142,8 +142,8 @@ velChart = new Chart(ctx1, {
       }
       },
       y_vel:{
-        title:{ display:true, text:'Velocity (m/s)', font:{ size:20 } },
-        ticks:{ font:{ size:14 } }
+        title:{ display:true, text:'Velocity (m/s)', font:{ size:20 }, color:'#fff' },
+        ticks:{ font:{ size:14 }, color:'#fff' }
       }
     },
     plugins:{ legend:{ labels:{ font:{ size:20 } } } }
@@ -175,8 +175,8 @@ altChart = new Chart(ctx2, {
       x:{ 
         display:true, 
         min: 0,
-        title:{ display:true, text:'Time (s)', font:{ size:20 } },
-        ticks: { font: { size: 14 }, callback: function(value, index) {
+        title:{ display:true, text:'Time (s)', font:{ size:20 }, color:'#fff' },
+        ticks: { font: { size: 14 }, color:'#fff', callback: function(value, index) {
         const label = this.getLabelForValue(index);
         if (!label) return '';
           return parseFloat(label); 
@@ -184,8 +184,79 @@ altChart = new Chart(ctx2, {
       }
       },
       y_alt:{
-        title:{ display:true, text:'Altitude (m)', font:{ size:20 } },
-        ticks:{ font:{ size:14 } }
+        title:{ display:true, text:'Altitude (m)', font:{ size:20 }, color:'#fff' },
+        ticks:{ font:{ size:14 }, color:'#fff' }
+      }
+    },
+    plugins:{ legend:{ labels:{ font:{ size:20 } } } }
+  }
+});
+
+
+// temperature chart
+const ctxTemp = document.getElementById('tempChart').getContext('2d');
+tempChart = new Chart(ctxTemp, {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [
+      { label:'Temperature (\u00B0C)', data:[], borderColor:'brown', fill:false, pointRadius:1 }
+    ]
+  },
+  options: {
+    animation:false,
+    responsive:false,
+    maintainAspectRatio: true,
+    scales: {
+      x:{ 
+        display:true, 
+        min: 0,
+        title:{ display:true, text:'Time (s)', font:{ size:20 }, color:'#fff' },
+        ticks: { font: { size: 14 }, color:'#fff', callback: function(value, index) {
+        const label = this.getLabelForValue(index);
+        if (!label) return '';
+          return parseFloat(label); 
+        }
+      }
+      },
+      y: {
+        title:{ display:true, text:'Temp (\u00B0C)', font:{ size:20 }, color:'#fff' },
+        ticks:{ font:{ size:14 }, color:'#fff' }
+      }
+    },
+    plugins:{ legend:{ labels:{ font:{ size:20 } } } }
+  }
+});
+
+// pressure chart
+const ctxPress = document.getElementById('pressChart').getContext('2d');
+pressChart = new Chart(ctxPress, {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [
+      { label:'Pressure: ', data:[], borderColor:'gray', fill:false, pointRadius:1 }
+    ]
+  },
+  options: {
+    animation:false,
+    responsive:false,
+    maintainAspectRatio: true,
+    scales: {
+      x:{ 
+        display:true, 
+        min: 0,
+        title:{ display:true, text:'Time (s)', font:{ size:20 }, color:'#fff' },
+        ticks: { font: { size: 14 }, color:'#fff', callback: function(value, index) {
+        const label = this.getLabelForValue(index);
+        if (!label) return '';
+          return parseFloat(label); 
+        }
+      }
+      },
+      y: {
+        title:{ display:true, text:'Pressure (atm)', font:{ size:20 }, color:'#fff' },
+        ticks:{ font:{ size:14 }, color:'#fff' }
       }
     },
     plugins:{ legend:{ labels:{ font:{ size:20 } } } }
@@ -193,15 +264,15 @@ altChart = new Chart(ctx2, {
 });
 
 // acceleration chart
-const ctx3 = document.getElementById('accChart').getContext('2d');
-accChart = new Chart(ctx3, {
+const ctx4 = document.getElementById('accChart').getContext('2d');
+accChart = new Chart(ctx4, {
   type: 'line',
   data: {
     labels: [],
     datasets: [
-      { label: 'ax (g)', data: [], borderColor:'red', fill:false, pointRadius:1 },
-      { label: 'ay (g)', data: [], borderColor:'green', fill:false, pointRadius:1 },
-      { label: 'az (g)', data: [], borderColor:'blue', fill:false, pointRadius:1 }
+      { label: 'ax', data: [], borderColor:'red', fill:false, pointRadius:1 },
+      { label: 'ay', data: [], borderColor:'green', fill:false, pointRadius:1 },
+      { label: 'az', data: [], borderColor:'blue', fill:false, pointRadius:1 }
     ]
   },
   options: { 
@@ -212,29 +283,33 @@ accChart = new Chart(ctx3, {
       x:{ 
         display:true, 
         min: 0,
-        title:{ display:true, text:'Time (s)', font:{ size:20 } },
-        ticks: { font: { size: 14 }, callback: function(value, index) {
+        title:{ display:true, text:'Time (s)', font:{ size:20 }, color:'#fff' },
+        ticks: { font: { size: 14 }, color:'#fff', callback: function(value, index) {
         const label = this.getLabelForValue(index);
         if (!label) return '';
           return parseFloat(label); 
         }
       }
       },
+      y: {
+        title:{ display:true, text:'Acceleration (g)', font:{ size:20 }, color:'#fff' },
+        ticks:{ font:{ size:14 }, color:'#fff' }
+      }
     },
     plugins:{ legend:{ labels:{ font:{ size:20 } } } }
   }
 });
 
 // orientation chart
-const ctx4 = document.getElementById('orientChart').getContext('2d');
-orientChart = new Chart(ctx4, {
+const ctx5 = document.getElementById('orientChart').getContext('2d');
+orientChart = new Chart(ctx5, {
   type: 'line',
   data: {
     labels: [],
     datasets: [
-      { label:'Pitch (\u00B0)', data:[], borderColor:'orange', fill:false, pointRadius:1 },
-      { label:'Roll (\u00B0)',  data:[], borderColor:'purple', fill:false, pointRadius:1 },
-      { label:'Yaw (\u00B0)',   data:[], borderColor:'teal', fill:false, pointRadius:1 }
+      { label:'Pitch', data:[], borderColor:'orange', fill:false, pointRadius:1 },
+      { label:'Roll',  data:[], borderColor:'purple', fill:false, pointRadius:1 },
+      { label:'Yaw',   data:[], borderColor:'teal', fill:false, pointRadius:1 }
     ]
   },
   options: { 
@@ -245,55 +320,17 @@ orientChart = new Chart(ctx4, {
       x:{ 
         display:true, 
         min: 0,
-        title:{ display:true, text:'Time (s)', font:{ size:20 } },
-        ticks: { font: { size: 14 }, callback: function(value, index) {
+        title:{ display:true, text:'Time (s)', font:{ size:20 }, color:'#fff' },
+        ticks: { font: { size: 14 }, color:'#fff', callback: function(value, index) {
         const label = this.getLabelForValue(index);
         if (!label) return '';
           return parseFloat(label); 
         }
       }
       },
-    },
-    plugins:{ legend:{ labels:{ font:{ size:20 } } } }
-  }
-});
-
-// environment chart
-const ctx5 = document.getElementById('envChart').getContext('2d');
-envChart = new Chart(ctx5, {
-  type: 'line',
-  data: {
-    labels: [],
-    datasets: [
-      { label:'Temperature (\u00B0C)', data:[], borderColor:'brown', fill:false, yAxisID:'y_temp', pointRadius:1 },
-      { label:'Pressure (atm)', data:[], borderColor:'gray', fill:false, yAxisID:'y_press', pointRadius:1 }
-    ]
-  },
-  options: {
-    animation:false,
-    responsive:false,
-    scales: {
-      x:{ 
-        display:true, 
-        min: 0,
-        title:{ display:true, text:'Time (s)', font:{ size:20 } },
-        ticks: { font: { size: 14 }, callback: function(value, index) {
-        const label = this.getLabelForValue(index);
-        if (!label) return '';
-          return parseFloat(label); 
-        }
-      }
-      },
-      y_temp:{ 
-        type:'linear', 
-        position:'left', 
-        title:{ display:true, text:'Temp (\u00B0C)', font:{ size:20 } }
-      },
-      y_press:{ 
-        type:'linear', 
-        position:'right', 
-        title:{ display:true, text:'Pressure (atm)', font:{ size:20 } }, 
-        grid:{ drawOnChartArea:false } 
+      y: {
+        title:{ display:true, text:'Orientation (°)', font:{ size:20 }, color:'#fff' },
+        ticks:{ font:{ size:14 }, color:'#fff' }
       }
     },
     plugins:{ legend:{ labels:{ font:{ size:20 } } } }
@@ -320,6 +357,30 @@ function updateLatest(tMs, seq, ax, ay, az, pitch, roll, yaw, temp, vel, press, 
   valLat.textContent = (lat !== undefined ? (Number(lat)/1e6).toFixed(6) : '-');
   valLon.textContent = (lon !== undefined ? (Number(lon)/1e6).toFixed(6) : '-');
   valAlt.textContent = (alt !== undefined ? Number(alt).toFixed(0) : '-');
+  
+  // Update chart labels with live data
+  if (velChart && velChart.data && velChart.data.datasets[0]) {
+    velChart.data.datasets[0].label = `Velocity: ${vel !== undefined ? Number(vel).toFixed(2) : '-'} m/s`;
+  }
+  if (altChart && altChart.data && altChart.data.datasets[0]) {
+    altChart.data.datasets[0].label = `Altitude: ${alt !== undefined ? Number(alt).toFixed(0) : '-'} m`;
+  }
+  if (accChart && accChart.data && accChart.data.datasets[0]) {
+    accChart.data.datasets[0].label = `ax (g)`;
+    accChart.data.datasets[1].label = `ay (g)`;
+    accChart.data.datasets[2].label = `az (g)`;
+  }
+  if (orientChart && orientChart.data && orientChart.data.datasets[0]) {
+    orientChart.data.datasets[0].label = `Pitch (°)`;
+    orientChart.data.datasets[1].label = `Roll (°)`;
+    orientChart.data.datasets[2].label = `Yaw (°)`;
+  }
+  if (tempChart && tempChart.data && tempChart.data.datasets[0]) {
+    tempChart.data.datasets[0].label = `Temperature: ${temp !== undefined ? Number(temp).toFixed(2) : '-'} °C`;
+  }
+  if (pressChart && pressChart.data && pressChart.data.datasets[0]) {
+    pressChart.data.datasets[0].label = `Pressure: ${press !== undefined ? Number(press).toFixed(3) : '-'} atm`;
+  }
   // Update orientation visualizations
   updateOrientationVisuals(pitch, yaw, roll);
 }
@@ -368,15 +429,23 @@ function pushToCharts(ax, ay, az, pitch, roll, yaw, temp, vel, press, alt) {
   }
   orientChart.update('none');
 
-  // environment
-  envChart.data.labels.push(tLabel);
-  envChart.data.datasets[0].data.push(temp);
-  envChart.data.datasets[1].data.push(press);
-  if (envChart.data.labels.length > maxPoints) { 
-    envChart.data.labels.shift(); 
-    envChart.data.datasets.forEach(ds => ds.data.shift()); 
+  // temperature
+  tempChart.data.labels.push(tLabel);
+  tempChart.data.datasets[0].data.push(temp);
+  if (tempChart.data.labels.length > maxPoints) { 
+    tempChart.data.labels.shift(); 
+    tempChart.data.datasets.forEach(ds => ds.data.shift()); 
   }
-  envChart.update('none');
+  tempChart.update('none');
+
+  // pressure
+  pressChart.data.labels.push(tLabel);
+  pressChart.data.datasets[0].data.push(press);
+  if (pressChart.data.labels.length > maxPoints) { 
+    pressChart.data.labels.shift(); 
+    pressChart.data.datasets.forEach(ds => ds.data.shift()); 
+  }
+  pressChart.update('none');
 }
 
 // SignalR handler
