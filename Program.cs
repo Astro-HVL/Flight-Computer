@@ -1,4 +1,3 @@
-// Program.cs
 using System;
 using System.IO.Ports;
 using System.Text;
