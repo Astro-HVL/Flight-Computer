@@ -54,7 +54,7 @@ function createCharts(){
     },
     options: { animation:false, responsive:false, scales:{ x:{ display:true, title:{display:true, text:'Samples'} } } }
   });
-// test
+
   // accel chart
   const ctx3 = document.getElementById('accChart').getContext('2d');
   accChart = new Chart(ctx3, {
