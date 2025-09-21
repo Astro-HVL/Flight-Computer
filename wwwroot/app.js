@@ -25,7 +25,7 @@ const valLat  = document.getElementById('val_lat');
 const valLon  = document.getElementById('val_lon');
 const valAlt  = document.getElementById('val_alt');
 
-// Charts
+// charts
 let velChart, altChart, accChart, orientChart, envChart;
 function createCharts(){
   
@@ -109,7 +109,6 @@ function createCharts(){
 }
 
 function updateLatest(tMs, seq, ax, ay, az, pitch, roll, yaw, temp, vel, press, lat, lon, alt) {
-  // tMs is millis since start -> show seconds
   valTime.textContent = (Number(tMs)/1000).toFixed(3) + " s";
   valSeq.textContent = seq ?? '-';
   valAx.textContent = (ax !== undefined ? Number(ax).toFixed(3) : '-');
@@ -168,7 +167,6 @@ function pushToCharts(ax, ay, az, pitch, roll, yaw, temp, vel, press, alt) {
 connection.on("telemetry", (payload) => {
   try {
     if (payload.type === 'telemetry') {
-      // parse fields (strings may come in)
       const t = Number(payload.t);
       const seq = Number(payload.seq);
       const ax = Number(payload.ax);
