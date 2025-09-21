@@ -1,8 +1,19 @@
+
+
+html, body {
+    background: #000 !important;
+    color: #fff !important;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    color: #fff !important;
+}
+
 #charts {
     display: flex;
     flex-wrap: wrap;
     gap: 16px;
-    justify-content: center; /* sentrerer grafene */
+    justify-content: center;
 }
 
 .chart-container {
@@ -10,22 +21,43 @@
     max-width: 33.333%;
     min-width: 300px;
     box-sizing: border-box;
+    background: #111 !important;
+    border: 1.5px solid #222;
+    color: #fff !important;
 }
 
 .chart-container canvas {
     width: 100% !important;
     height: auto !important;
-    background: #ffffff;
-    border: 1px solid #ddd;
+    background: #111 !important;
+    border: 1px solid #222;
 }
 
 #statusPanel {
-    margin: 24px auto;  /* horisontal auto = centrerer boksen */
+    margin: 24px auto;
     padding: 16px;
-    border: 1px solid #ddd;
-    background: #fafafa;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    max-width: 600px;    /* maks bredde på boksen */
-    width: 90%;          /* fyller litt på små skjermer */
-    text-align: left;    /* beholder teksten venstrejustert */
+    border: 1.5px solid #333;
+    background: #111 !important;
+    border: 1.5px solid #222;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    max-width: 600px;
+    width: 90%;
+    text-align: left;
+    color: #fff !important;
+}
+
+table, th, td {
+    color: #fff !important;
+    border-color: #333 !important;
+}
+
+thead, th {
+    background: #111 !important;
+    color: #fff !important;
+}
+
+#debug {
+    background: #111 !important;
+    color: #fff !important;
+    border: 1px solid #222 !important;
 }

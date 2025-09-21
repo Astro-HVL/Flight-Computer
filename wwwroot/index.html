@@ -7,18 +7,42 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/7.0.5/signalr.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    body { font-family: Arial, Helvetica, sans-serif; margin: 16px; }
+    body { font-family: Arial, Helvetica, sans-serif; margin: 16px; background: #000 !important; color: #fff !important; }
     #charts { display:flex; gap:16px; flex-wrap:wrap; }
-    canvas { background:#ffffff; border:1px solid #ddd; }
-    #statusPanel { margin:12px 0; padding:8px; border:1px solid #ddd; background:#fafafa; max-width:1200px; }
-    table td { padding:4px 8px; }
-    #debug { height:140px; overflow:auto; border:1px solid #eee; padding:8px; white-space:pre-wrap; background:#f8f8f8;}
+    canvas { background:#111 !important; border:1px solid #222 !important; }
+    #statusPanel { margin:12px 0; padding:8px; border:1px solid #222 !important; background:#111 !important; max-width:1200px; color: #fff !important; }
+    table td { padding:4px 8px; color: #fff !important; background: #111 !important; }
+    #debug { height:140px; overflow:auto; border:1px solid #222 !important; padding:8px; white-space:pre-wrap; background:#111 !important; color: #fff !important;}
   </style>
 </head>
 <body>
-  <h1>Test dashboard</h1>
+
+  <div style="display: flex; justify-content: center; align-items: center; position: relative;">
+    <h1 style="flex:1; text-align:left; margin:0;">Test dashboard</h1>
+    <div id="timerDisplay" style="flex:1; text-align:center; font-size:2.2rem; font-family:monospace; font-weight:bold; color:#fff; letter-spacing:2px;">
+      <span style="font-family:inherit; font-size:2rem; font-weight:normal; letter-spacing:normal;">Flight time: </span><span id="timerValue"></span>
+    </div>
+    <div style="flex:1;"></div>
+  </div>
   <br>
 
+<div style="display:flex; gap:16px; margin-bottom:16px;">
+  <div style="flex:1; min-width:180px; background:#111; color:#fff; border:2px solid #444; border-radius:6px; padding:8px;">
+    <div style="font-weight:bold; font-size:18px;">PITCH</div>
+    <div id="pitchValue" style="font-size:24px; margin-bottom:4px;">0.00 &deg;</div>
+    <canvas id="pitchViz" width="160" height="120" style="background:#222; display:block; margin:auto;"></canvas>
+  </div>
+  <div style="flex:1; min-width:180px; background:#111; color:#fff; border:2px solid #444; border-radius:6px; padding:8px;">
+    <div style="font-weight:bold; font-size:18px;">YAW</div>
+    <div id="yawValue" style="font-size:24px; margin-bottom:4px;">0.00 &deg;</div>
+    <canvas id="yawViz" width="160" height="120" style="background:#222; display:block; margin:auto;"></canvas>
+  </div>
+  <div style="flex:1; min-width:180px; background:#111; color:#fff; border:2px solid #444; border-radius:6px; padding:8px;">
+    <div style="font-weight:bold; font-size:18px;">ROLL</div>
+    <div id="rollValue" style="font-size:24px; margin-bottom:4px;">0.00 &deg;</div>
+    <canvas id="rollViz" width="160" height="120" style="background:#222; display:block; margin:auto;"></canvas>
+  </div>
+</div>
 <div id="charts">
   <div class="chart-container">
     <canvas id="velChart"></canvas>

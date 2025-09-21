@@ -18,6 +18,84 @@ const valAz   = document.getElementById('val_az');
 const valPitch= document.getElementById('val_pitch');
 const valRoll = document.getElementById('val_roll');
 const valYaw  = document.getElementById('val_yaw');
+
+// Visualization DOM elements (top-level)
+const pitchViz = document.getElementById('pitchViz');
+const yawViz = document.getElementById('yawViz');
+const rollViz = document.getElementById('rollViz');
+const pitchValue = document.getElementById('pitchValue');
+const yawValue = document.getElementById('yawValue');
+const rollValue = document.getElementById('rollValue');
+
+function drawRocket(ctx, angleDeg) {
+  // Draw a simple rocket shape centered and rotated by angleDeg
+  const w = ctx.canvas.width, h = ctx.canvas.height;
+  ctx.clearRect(0, 0, w, h);
+  ctx.save();
+  ctx.translate(w/2, h/2);
+  ctx.rotate(angleDeg * Math.PI / 180);
+  ctx.beginPath();
+  ctx.moveTo(0, -40); // nose
+  ctx.lineTo(12, 20); // right body
+  ctx.lineTo(6, 20); // right fin top
+  ctx.lineTo(18, 40); // right fin tip
+  ctx.lineTo(0, 28); // bottom
+  ctx.lineTo(-18, 40); // left fin tip
+  ctx.lineTo(-6, 20); // left fin top
+  ctx.lineTo(-12, 20); // left body
+  ctx.closePath();
+  ctx.fillStyle = '#fff';
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 2;
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawRoll(ctx, angleDeg) {
+  // Draw a circle with a line indicating roll angle
+  const w = ctx.canvas.width, h = ctx.canvas.height;
+  ctx.clearRect(0, 0, w, h);
+  ctx.save();
+  ctx.translate(w/2, h/2);
+  ctx.beginPath();
+  ctx.arc(0, 0, 32, 0, 2*Math.PI);
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 4;
+  ctx.stroke();
+  // Draw roll indicator line
+  ctx.save();
+  ctx.rotate(angleDeg * Math.PI / 180);
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(0, -32);
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 4;
+  ctx.stroke();
+  ctx.restore();
+  // Draw 3 small lines for reference
+  for (let i = 0; i < 3; i++) {
+    ctx.save();
+    ctx.rotate((i * 120) * Math.PI / 180);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(0, -40);
+    ctx.strokeStyle = '#fff8';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function updateOrientationVisuals(pitch, yaw, roll) {
+  if (pitchViz && typeof pitch === 'number' && !isNaN(pitch)) drawRocket(pitchViz.getContext('2d'), pitch);
+  if (yawViz && typeof yaw === 'number' && !isNaN(yaw)) drawRocket(yawViz.getContext('2d'), yaw);
+  if (rollViz && typeof roll === 'number' && !isNaN(roll)) drawRoll(rollViz.getContext('2d'), roll);
+  if (pitchValue && typeof pitch === 'number' && !isNaN(pitch)) pitchValue.textContent = pitch.toFixed(2) + ' °';
+  if (yawValue && typeof yaw === 'number' && !isNaN(yaw)) yawValue.textContent = yaw.toFixed(2) + ' °';
+  if (rollValue && typeof roll === 'number' && !isNaN(roll)) rollValue.textContent = roll.toFixed(2) + ' °';
+}
 const valTemp = document.getElementById('val_temp');
 const valVel  = document.getElementById('val_vel');
 const valPress= document.getElementById('val_press');
@@ -54,6 +132,7 @@ velChart = new Chart(ctx1, {
     scales:{ 
       x:{ 
         display:true, 
+        min: 0,
         title:{ display:true, text:'Time (s)', font:{ size:20 } },
         ticks: { font: { size: 14 }, callback: function(value, index) {
         const label = this.getLabelForValue(index);
@@ -95,6 +174,7 @@ altChart = new Chart(ctx2, {
     scales:{ 
       x:{ 
         display:true, 
+        min: 0,
         title:{ display:true, text:'Time (s)', font:{ size:20 } },
         ticks: { font: { size: 14 }, callback: function(value, index) {
         const label = this.getLabelForValue(index);
@@ -131,6 +211,7 @@ accChart = new Chart(ctx3, {
     scales:{ 
       x:{ 
         display:true, 
+        min: 0,
         title:{ display:true, text:'Time (s)', font:{ size:20 } },
         ticks: { font: { size: 14 }, callback: function(value, index) {
         const label = this.getLabelForValue(index);
@@ -163,6 +244,7 @@ orientChart = new Chart(ctx4, {
     scales:{
       x:{ 
         display:true, 
+        min: 0,
         title:{ display:true, text:'Time (s)', font:{ size:20 } },
         ticks: { font: { size: 14 }, callback: function(value, index) {
         const label = this.getLabelForValue(index);
@@ -193,6 +275,7 @@ envChart = new Chart(ctx5, {
     scales: {
       x:{ 
         display:true, 
+        min: 0,
         title:{ display:true, text:'Time (s)', font:{ size:20 } },
         ticks: { font: { size: 14 }, callback: function(value, index) {
         const label = this.getLabelForValue(index);
@@ -219,7 +302,11 @@ envChart = new Chart(ctx5, {
 }
 
 function updateLatest(tMs, seq, ax, ay, az, pitch, roll, yaw, temp, vel, press, lat, lon, alt) {
-  valTime.textContent = (Number(tMs)/1000).toFixed(3) + " s";
+  const timeStr = (Number(tMs)/1000).toFixed(3) + " s";
+  valTime.textContent = timeStr;
+  // Update timer value at top
+  const timerValue = document.getElementById('timerValue');
+  if (timerValue) timerValue.textContent = timeStr;
   valSeq.textContent = seq ?? '-';
   valAx.textContent = (ax !== undefined ? Number(ax).toFixed(3) : '-');
   valAy.textContent = (ay !== undefined ? Number(ay).toFixed(3) : '-');
@@ -233,10 +320,12 @@ function updateLatest(tMs, seq, ax, ay, az, pitch, roll, yaw, temp, vel, press, 
   valLat.textContent = (lat !== undefined ? (Number(lat)/1e6).toFixed(6) : '-');
   valLon.textContent = (lon !== undefined ? (Number(lon)/1e6).toFixed(6) : '-');
   valAlt.textContent = (alt !== undefined ? Number(alt).toFixed(0) : '-');
+  // Update orientation visualizations
+  updateOrientationVisuals(pitch, yaw, roll);
 }
 
 function pushToCharts(ax, ay, az, pitch, roll, yaw, temp, vel, press, alt) {
-  const maxPoints = 250;
+  const maxPoints = 100000000;
   const tLabel = valTime.textContent || '';  // bruk tid fra mikrokontrolleren
 
   // velocity
