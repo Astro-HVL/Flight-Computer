@@ -47,8 +47,19 @@
 </div>
 <div id="charts">
 
-  <div class="chart-container" style="min-width:480px; min-height:380px; display:flex; flex-direction:column; align-items:center; justify-content:center;">
-    <div id="rocket3dContainer" style="width:480px; height:380px; background:#111; border:1.5px solid #222; border-radius:8px;"></div>
+  <div class="chart-container" style="min-width:320px; min-height:220px; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+    <div id="rocket3dContainer"
+         style="
+           width: 32vw;
+           height: 28vh;
+           max-width: 540px;
+           max-height: 420px;
+           min-width: 320px;
+           min-height: 220px;
+           background:#111;
+           border:1.5px solid #222;
+           border-radius:8px;">
+    </div>
     <div style="text-align:center; color:#fff; font-size:1.1rem; margin-top:6px;">3D Orientation</div>
   </div>
   <div class="chart-container">
@@ -61,7 +72,7 @@
     <div style="text-align:center;"></div>
   </div>
 
-
+  
   <div class="chart-container">
     <canvas id="tempChart"></canvas>
     <div style="text-align:center;"></div>

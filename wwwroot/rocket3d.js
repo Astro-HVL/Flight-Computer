@@ -93,6 +93,21 @@ function initRocket3D() {
 
     rocket3dModel = rocketGroup;
 
+    // --- Add this block for dynamic resizing ---
+    function onResize() {
+        const container = document.getElementById('rocket3dContainer');
+        if (!container) return;
+        const width = container.clientWidth;
+        const height = container.clientHeight;
+        rocket3dCamera.aspect = width / height;
+        rocket3dCamera.updateProjectionMatrix();
+        rocket3dRenderer.setSize(width, height);
+    }
+    window.addEventListener('resize', onResize);
+    // Call once to ensure correct size on load
+    onResize();
+    // --- End dynamic resizing block ---
+
     animateRocket3D();
 }
 
