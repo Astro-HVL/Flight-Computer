@@ -8,7 +8,7 @@ function dbg(s){
   debug.textContent = s + "\n" + debug.textContent;
   if(debug.textContent.length>8000) debug.textContent = debug.textContent.slice(0,8000);
 }
-const BLINK_PITCH_THRESHOLD = 90;
+const BLINK_AZ_THRESHOLD = 0;
 // DOM elements
 const valTime = document.getElementById('val_time');
 const valSeq  = document.getElementById('val_seq');
@@ -117,6 +117,7 @@ const valAlt  = document.getElementById('val_alt');
 // === BLINK VARS ===
 let blinkActive = false;
 let blinkInterval = null;
+
 function startBlinking(){
   if (!blinkActive){
     blinkActive = true;
@@ -447,6 +448,7 @@ function pushToCharts(ax, ay, az, pitch, roll, yaw, temp, vel, press, alt) {
   accChart.data.datasets[0].data.push(ax);
   accChart.data.datasets[1].data.push(ay);
   accChart.data.datasets[2].data.push(az);
+
   if (accChart.data.labels.length > maxPoints) { 
     accChart.data.labels.shift(); 
     accChart.data.datasets.forEach(ds => ds.data.shift()); 
@@ -506,14 +508,14 @@ connection.on("telemetry", (payload) => {
       pushToCharts(ax, ay, az, pitch, roll, yaw, temp, vel, press, alt);
 
       // 🚀 Constant blink logic
-      if (yaw !== undefined && yaw >= BLINK_PITCH_THRESHOLD) {
+      if (Number(payload.az) <= BLINK_AZ_THRESHOLD) {
         document.body.classList.add("blink-red");
       } else {
         document.body.classList.remove("blink-red");
       }
 
       const dashboardTitle = document.querySelector('h1');
-      if (yaw !== undefined && yaw >= BLINK_PITCH_THRESHOLD) {
+      if (Number(payload.az) <= BLINK_AZ_THRESHOLD) {
         document.body.classList.add("blink-red");
         if (dashboardTitle) dashboardTitle.textContent = "WARNING: Altitude dropping";
       } else {

@@ -15,8 +15,8 @@ app.UseStaticFiles();
 app.MapHub<TelemetryHub>("/telemetry");
 
 var cts = new CancellationTokenSource();
-var portName = Environment.GetEnvironmentVariable("TELEM_PORT") ?? (OperatingSystem.IsWindows() ? "COM5" : "/dev/ttyUSB0");
-var baud = int.TryParse(Environment.GetEnvironmentVariable("TELEM_BAUD"), out var b) ? b : 57600;
+var portName = Environment.GetEnvironmentVariable("TELEM_PORT") ?? (OperatingSystem.IsWindows() ? "COM3" : "/dev/ttyUSB0");
+var baud = int.TryParse(Environment.GetEnvironmentVariable("TELEM_BAUD"), out var b) ? b : 115200;
 
 var hub = app.Services.GetRequiredService<IHubContext<TelemetryHub>>();
 _ = Task.Run(() => SerialLoop(portName, baud, hub, cts.Token));
