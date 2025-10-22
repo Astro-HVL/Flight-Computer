@@ -9,7 +9,7 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.min.js"></script>
   <script src="rocket3d.js"></script>
   <style>
-    body { font-family: Arial, Helvetica, sans-serif; margin: 16px; background: #000; color: #fff; }
+    body { font-family: Arial, Helvetica, sans-serif; margin: 16px; color: #fff; }
     #charts { display:flex; gap:16px; flex-wrap:wrap; }
     canvas { background:#111; border:1px solid #222 ; }
     #statusPanel { margin:12px 0; padding:8px; border:1px solid #222 ; background:#111; max-width:1200px; color: #fff; }
@@ -21,6 +21,9 @@
 
   <div style="display: flex; justify-content: center; align-items: center; position: relative;">
     <h1 style="flex:1; text-align:left; margin:0;">Test dashboard</h1>
+    <div style="position:absolute; right:12px; top:12px;">
+      <a href="/live_data.html" style="color:#9fd6ff; text-decoration:none; padding:6px 10px; background:#071033; border-radius:6px;">Live view</a>
+    </div>
     <div id="timerDisplay" style="flex:1; text-align:center; font-size:2.2rem; font-family:monospace; font-weight:bold; color:#fff; letter-spacing:2px;">
       <span style="font-family:inherit; font-size:2rem; font-weight:normal; letter-spacing:normal;">Flight time: </span><span id="timerValue"></span>
     </div>

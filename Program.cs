@@ -15,13 +15,50 @@ app.UseStaticFiles();
 app.MapHub<TelemetryHub>("/telemetry");
 
 var cts = new CancellationTokenSource();
-var portName = Environment.GetEnvironmentVariable("TELEM_PORT") ?? (OperatingSystem.IsWindows() ? "COM3" : "/dev/ttyUSB0");
+var portName = Environment.GetEnvironmentVariable("TELEM_PORT") ?? (OperatingSystem.IsWindows() ? "COM5" : "/dev/ttyUSB0");
 var baud = int.TryParse(Environment.GetEnvironmentVariable("TELEM_BAUD"), out var b) ? b : 115200;
 
 var hub = app.Services.GetRequiredService<IHubContext<TelemetryHub>>();
-_ = Task.Run(() => SerialLoop(portName, baud, hub, cts.Token));
 
-app.Lifetime.ApplicationStopping.Register(() => cts.Cancel());
+// Only start the serial loop if the configured port actually exists on the system.
+try
+{
+    bool portExists = false;
+    if (OperatingSystem.IsWindows())
+    {
+        var available = SerialPort.GetPortNames();
+        portExists = Array.Exists(available, p => string.Equals(p, portName, StringComparison.OrdinalIgnoreCase));
+        if (!portExists)
+        {
+            Console.WriteLine($"Serial port '{portName}' not found. Available ports: {string.Join(',', available)}. Skipping serial loop.");
+        }
+    }
+    else
+    {
+        // On Unix-like systems, check the device file
+        portExists = System.IO.File.Exists(portName);
+        if (!portExists)
+        {
+            Console.WriteLine($"Serial device '{portName}' not found. Skipping serial loop.");
+        }
+    }
+
+    if (portExists)
+    {
+        _ = Task.Run(() => SerialLoop(portName, baud, hub, cts.Token));
+        app.Lifetime.ApplicationStopping.Register(() => cts.Cancel());
+    }
+    else
+    {
+        // still register cancellation to be safe
+        app.Lifetime.ApplicationStopping.Register(() => cts.Cancel());
+    }
+}
+catch (Exception ex)
+{
+    Console.WriteLine("Error checking serial ports: " + ex.Message + ". Skipping serial loop.");
+    app.Lifetime.ApplicationStopping.Register(() => cts.Cancel());
+}
 app.Run();
 
 async Task SerialLoop(string port, int baudrate, IHubContext<TelemetryHub> hub, CancellationToken token)

@@ -22,7 +22,11 @@ function initRocket3D() {
     rocket3dCamera.position.set(0, 0, 4.2); // Move camera closer
 
     rocket3dRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    rocket3dRenderer.setClearColor(0x111111, 1);
+    // Make renderer background transparent so the white container shows through
+    rocket3dRenderer.setClearColor(0xffffff, 0);
+    if (typeof rocket3dRenderer.setClearAlpha === 'function') {
+        rocket3dRenderer.setClearAlpha(0);
+    }
     rocket3dRenderer.setSize(container.clientWidth, container.clientHeight);
     container.appendChild(rocket3dRenderer.domElement);
 
