@@ -132,7 +132,6 @@ static float sigma_baro = 1.5f;  // m (baro-høydestøy etter baseline & LPF)
 // avledete kovarianser:
 static float R_baro;   // = sigma_baro^2
 
-
 void softReset() {
   SCB_AIRCR = 0x05FA0004;  // Myk programreset uten bootloader
 }
@@ -508,28 +507,23 @@ void loop() {
   float altitude_est_m = z_est;
   float vz_est_mps     = v_est;
 
-  // Holde høyden på 0 m når ikke i flight modus
+  // Høyde og hastighet = 0 når system i ro (ikke i LAUNCH)
   bool onPad = (state == SYSTEM_CHECK || state == OPERATION_READY);
 
   if (onPad) {
-    // bredere snap nær 0 når du er inne / på pad
-    const float ALT_SNAP = 1.0f;   // meter
-    const float VZ_SNAP  = 0.15f;  // m/s
+    // HARD lock av KF-tilstand
+    z_est = 0.0f;
+    v_est = 0.0f;
 
-    if (fabsf(altitude_est_m) < ALT_SNAP) {
-      altitude_est_m = 0.0f;
-      z_est = 0.0f;
-    }
-    if (fabsf(vz_est_mps) < VZ_SNAP) {
-      vz_est_mps = 0.0f;
-      v_est = 0.0f;
-    }
+    // Reset kovarians (viktig!)
+    P00 = 0.5f;
+    P01 = 0.0f;
+    P10 = 0.0f;
+    P11 = 0.5f;
 
-    // aldri rapporter negativ høyde på pad
-    if (altitude_est_m < 0.0f) {
-      altitude_est_m = 0.0f;
-      z_est = 0.0f;
-    }
+    // Synk UI-variabler
+    altitude_est_m = 0.0f;
+    vz_est_mps     = 0.0f;
   }
 
   // Tiny output clamp (etter nulling)
@@ -556,35 +550,41 @@ void loop() {
       break;
 
     case OPERATION_READY: {
-      // --- Robust launch detection ---
-      static int accelCounter = 0;      // teller høy aksel-samples
-      static int baroCounter  = 0;      // teller stigende høyde
+      static int accelCounter = 0;
+      static int baroCounter  = 0;
       static unsigned long quietTimer = 0;
 
-      // 1️⃣ Beregn total akselerasjonsnorm (uavhengig av orientering)
+      // --- Total akselerasjon ---
       float a_norm = sqrtf(
-          icm_accelEv.acceleration.x * icm_accelEv.acceleration.x +
-          icm_accelEv.acceleration.y * icm_accelEv.acceleration.y +
-          icm_accelEv.acceleration.z * icm_accelEv.acceleration.z
+        icm_accelEv.acceleration.x * icm_accelEv.acceleration.x +
+        icm_accelEv.acceleration.y * icm_accelEv.acceleration.y +
+        icm_accelEv.acceleration.z * icm_accelEv.acceleration.z
       );
 
-      // 2️⃣ Grav-kompensert vertikal aksel (for redundans)
-      float az_lin_launch = icm_accelEv.acceleration.z - g0;
+      // Netto aksel (uten gravitasjon)
+      float a_net = fabsf(a_norm - g0);
 
-      // 3️⃣ Arming: må ha vært rolig minst 0.5 s
-      bool stableBefore = (millis() - quietTimer > 500);
-      if (fabsf(v_est) > 0.5f || fabsf(az_lin_launch) > 2.0f)
+      // --- Arming: må ha vært helt rolig i 0.5 s ---
+      if (fabsf(v_est) > 0.3f || a_net > 0.5f)
         quietTimer = millis();
 
-      // 4️⃣ Aksel- og baro-kriterier
-      if (a_norm > 15.0f || az_lin_launch > 8.0f) accelCounter++;   // 1.5 g eller 8 m/s²
-      else accelCounter = 0;
+      bool stableBefore = (millis() - quietTimer > 500);
 
-      if (fabsf(v_est) > 1.0f || altitude_m > 1.5f) baroCounter++;
-      else baroCounter = 0;
+      // --- Aksel-kriterium (NETTO) ---
+      if (a_net > 1.0f)          // 5 m/s² ≈ 0.5 g netto (konservativ start) // 5.0f
+        accelCounter++;
+      else
+        accelCounter = 0;
 
-      // 5️⃣ Kombinert kriterium                                    // !!!!!!!!!!!!!!!!!!!!VIKTIG!!!!!!!!!!!!!!!!!!!!!!!!!!
-      if (stableBefore && accelCounter >= 2 || baroCounter >= 2) { // !!!!!!!!!!MÅ NOK TWEAKES LITT FØR LAUNCH!!!!!!!!!!!!!
+      // --- Baro-kriterium ---
+      if (fabsf(v_est) > 2.0f || altitude_est_m > 3.0f)
+        baroCounter++;
+      else
+        baroCounter = 0;
+
+      // --- KOMBINERT OG KORREKT ---
+      //if (stableBefore && (accelCounter >= 8 || baroCounter >= 5)) { // 8 og 5
+      if (accelCounter >= 5) {
         state = LIFT_OFF;
         LIFT_OFFStart = millis();
         stateStart = millis();
@@ -594,9 +594,19 @@ void loop() {
         R_baro = sigma_baro * sigma_baro;
       }
 
+      Serial.print("a_net=");
+      Serial.print(a_net, 2);
+      Serial.print("  accelCnt=");
+      Serial.print(accelCounter);
+      Serial.print("  baroCnt=");
+      Serial.print(baroCounter);
+      Serial.print("  stable=");
+      Serial.println(stableBefore);
+
+
       break;
     }
-
+    
     case LIFT_OFF:
       // Bytt til APOGEE ved høyde > 4500 m (enten fra BMP eller simulert)
       if ((bmp_ok && altitude_m >= 4500.0f) || (!bmp_ok && alt_sim >= 4500)) {
