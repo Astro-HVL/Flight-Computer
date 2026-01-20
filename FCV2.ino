@@ -593,17 +593,6 @@ void loop() {
         sigma_baro = 1.2f;
         R_baro = sigma_baro * sigma_baro;
       }
-
-      Serial.print("a_net=");
-      Serial.print(a_net, 2);
-      Serial.print("  accelCnt=");
-      Serial.print(accelCounter);
-      Serial.print("  baroCnt=");
-      Serial.print(baroCounter);
-      Serial.print("  stable=");
-      Serial.println(stableBefore);
-
-
       break;
     }
     
