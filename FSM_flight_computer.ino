@@ -1,6 +1,7 @@
 #include <SPI.h>
 #include <Wire.h>
 #include <EEPROM.h>
+#include <math.h>
 
 #include <Adafruit_Sensor.h>
 #include <Adafruit_ADXL375.h>
@@ -8,26 +9,27 @@
 #include <Adafruit_LIS3MDL.h>
 #include <Adafruit_BMP3XX.h>
 
-#include <Adafruit_AHRS_Madgwick.h>
-Adafruit_Madgwick filter;
-
 #include "calibration_data.h"
 CalibrationData CAL;
 
-
+// PIN-KONFIG
 #define SPI_SCK   13
 #define SPI_MISO  12
 #define SPI_MOSI  11
 #define CS_ADXL   10
 #define CS_ICM    15
+// #define fallskjermpin
 
-
+// SENSOR-OBJEKTER
 Adafruit_ADXL375   adxl(CS_ADXL, &SPI, 12345);
 Adafruit_ICM20649  icm;
 Adafruit_LIS3MDL   lis3mdl;
 Adafruit_BMP3XX    bmp;
 
-//     KALIBRERINGSVARIABLER (lastes fra EEPROM)
+// Fallskjerm
+static bool parachuteFired = false;
+
+// KALIBRERINGSVARIABLER (lastes fra EEPROM)
 float gyro_offset_x = 0, gyro_offset_y = 0, gyro_offset_z = 0;
 float adxl_xOff = 0, adxl_yOff = 0, adxl_zOff = 0;
 float mag_xBias = 0, mag_yBias = 0, mag_zBias = 0;
@@ -37,17 +39,21 @@ float bmp_p0_Pa = 101325.0f;
 float bmp_tOff = 0.0f;
 float bmp_pOff = 0.0f;
 
-//   TILSTAND & DYNAMIKK
+// TILSTAND & DYNAMIKK
 float roll = 0.0f, pitch = 0.0f, yaw = 0.0f;
-float yaw_offset = 0.0f;
+float alpha_rp = 0.98f;
 unsigned long lastMicros = 0;
 
 unsigned long seq = 0;
-long   alt_sim = 0;
-float  vel_sim = 0;
-float  a_up = 10.0f;
 float  g0 = 9.80665f;
 unsigned long LIFT_OFFStart = 0;
+
+// VERTIKAL HASTIGHET (baro + accel)
+float alt_baro_prev = 0.0f;   // For differanseberegning
+float alt_baro_filt = 0.0f;   // Lavpasset høyde
+float vz_baro = 0.0f;         // d(alt)/dt fra baro
+float vz_acc  = 0.0f;         // Integrert akselerasjon (grav-kompensert)
+float vz_filt = 0.0f;         // Flettet resultat av begge (endelig vertikal hastighet)
 
 
 enum State {
@@ -70,7 +76,7 @@ static inline float wrap180(float a){
   return a;
 }
 
-//   FYSIKK-FUNKSJONER
+// Beregning av trykk og temperatur
 float pressureAtHeight(float h) {
   if (h < 11000) return 101325 * pow(1 - 0.0065 * h / 288.15, 5.2561);
   else if (h < 20000) return 22632 * exp(-0.000157 * (h - 11000));
@@ -80,6 +86,7 @@ float pressureAtHeight(float h) {
   else if (h < 71000) return 66 * pow(1 - 0.0028 * (h - 51000) / 270.65, -12.2016);
   else return 0.12;
 }
+
 float temperatureAtHeight(float h) {
   if (h < 11000) return 15 - 0.0065 * h;
   else if (h < 20000) return -56.5;
@@ -90,22 +97,51 @@ float temperatureAtHeight(float h) {
   else return -58.5;
 }
 
-// --- Kalman: z-v med aksel-input ---
-static float z_est = 0.0f, v_est = 0.0f;     // tilstandsestimat
-static float P00 = 1, P01 = 0, P10 = 0, P11 = 1; // kovarians
+// MAGNETOMETER-FUNKSJONER
+bool computeMagYawDeg(float rollDeg, float pitchDeg, float& yawMagDeg){
+  sensors_event_t magEv;
 
-// Tuning (startforslag):
-static float sigma_acc = 0.4f;   // m/s^2 (effektiv støy i az_lin etter filtrering)
-static float sigma_model_v = 0.15f;  // m/s (uforutsigbarhet utover aksel-input)
-static float sigma_baro = 1.5f;  // m (baro-høydestøy etter baseline & LPF)
+  // Adafruit sin getEvent() er ofte void (ikke bool),
+  // så vi kan ikke skrive: if(!getEvent(...)) return false;
+  lis3mdl.getEvent(&magEv);
 
-// avledete kovarianser:
-static float R_baro;   // = sigma_baro^2
+  // En enkel sanity-check for å unngå NaN/rare ting hvis sensor ikke leverer.
+  // (Ikke perfekt, men hindrer at yaw blir ødelagt av "tomt" signal.)
+  if (magEv.magnetic.x == 0.0f && magEv.magnetic.y == 0.0f && magEv.magnetic.z == 0.0f) {
+    return false;
+  }
 
-void softReset() {
-  SCB_AIRCR = 0x05FA0004;  // Myk programreset uten bootloader
+  float mx = (magEv.magnetic.x - mag_xBias) * mag_xScale;
+  float my = (magEv.magnetic.y - mag_yBias) * mag_yScale;
+  float mz = (magEv.magnetic.z - mag_zBias) * mag_zScale;
+
+  const float cr = cosf(deg2rad(rollDeg));
+  const float sr = sinf(deg2rad(rollDeg));
+  const float cp = cosf(deg2rad(pitchDeg));
+  const float sp = sinf(deg2rad(pitchDeg));
+
+  const float Xh = mx * cp + my * sr * sp + mz * cr * sp;
+  const float Yh = my * cr - mz * sr;
+
+  float hdg = rad2deg(atan2f(-Yh, Xh));
+  hdg += decl_deg;
+  yawMagDeg = wrap180(hdg);
+  return true;
 }
 
+float magTrust(const float yawMagDeg, const float lastYaw, const float dt){
+  float dy = fabsf(wrap180(yawMagDeg - lastYaw));
+  float speed_ok = (dy <= 30.0f * dt);
+  return speed_ok ? 1.0f : 0.15f;
+}
+
+void softReset() {
+#if defined(__arm__) || defined(ARDUINO_ARCH_ARM)
+  SCB_AIRCR = 0x05FA0004;  // ARM programreset
+#else
+  // Ikke-ARM: ikke gjør noe (så sketchen i det minste kompilerer).
+#endif
+}
 
 //   CSV-EMITTER (til PC-dashboard)
 inline void emitCsv(float tSec, float ax_g, float ay_g, float az_g,
@@ -113,14 +149,14 @@ inline void emitCsv(float tSec, float ax_g, float ay_g, float az_g,
                     float temperature, float vel, float press,
                     long lat, long lon, long alt_m, int state)
 {
-  Serial.print(tSec, 1); Serial.print(',');
+  Serial.print(tSec, 3); Serial.print(',');
   Serial.print(seq++);   Serial.print(',');
   Serial.print(ax_g);    Serial.print(',');
   Serial.print(ay_g);    Serial.print(',');
-  Serial.print(az_g, 1);    Serial.print(',');
-  Serial.print(pitch, 1);   Serial.print(',');
-  Serial.print(roll, 1);    Serial.print(',');
-  Serial.print(yaw, 1);     Serial.print(',');
+  Serial.print(az_g);    Serial.print(',');
+  Serial.print(pitch);   Serial.print(',');
+  Serial.print(roll);    Serial.print(',');
+  Serial.print(yaw);     Serial.print(',');
   Serial.print(temperature); Serial.print(',');
   Serial.print(vel);     Serial.print(',');
   Serial.print(press);   Serial.print(',');
@@ -133,16 +169,14 @@ inline void emitCsv(float tSec, float ax_g, float ay_g, float az_g,
 void setup() {
   delay(1000);
   Serial.begin(115200);
-  while (!Serial && millis() < 6000);
+  while (!Serial && millis() < 4000);
   Serial.println("✅ Flight firmware started");
 
-  filter.begin(100);  // sample rate ~ din loopfrekvens
-  filter.setBeta(0.05f);  // mindre drift, roligere yaw
   Wire.begin();
   Wire.setClock(400000);
   SPI.begin();
 
-  // ---------- LAST KALIBRERINGSVERDIER ----------
+  // LAST KALIBRERINGSVERDIER
   cal_load(CAL);
   if (!cal_isValid(CAL)) {
     Serial.println(F("⚠️ EEPROM: Ingen gyldig kalibrering funnet. Bruker standardverdier."));
@@ -174,7 +208,7 @@ void setup() {
   Serial.printf("Mag scale inv:     %.3f %.3f %.3f\n", mag_xScale, mag_yScale, mag_zScale);
   Serial.println(F("-------------------------"));
 
-  // ---------- SENSORINIT ----------
+  // SENSORINIT
   if (!icm.begin_SPI(CS_ICM, &SPI)) {
     while (1) { Serial.println("ICM20649 init fail"); delay(500); }
   }
@@ -193,18 +227,6 @@ void setup() {
     lis3mdl.setOperationMode(LIS3MDL_CONTINUOUSMODE);
   }
 
-  // ---------- INITIAL YAW ALIGNMENT ----------
-  delay(500);  // kort ventetid for å sikre stabile mag-data
-  sensors_event_t m;
-  if (lis3mdl.getEvent(&m)) {
-    float yawMag0 = atan2f(m.magnetic.y, m.magnetic.x) * 57.2958f;
-    yaw = yawMag0;          // behold magnetisk yaw som +-vinkel
-    yaw_offset = -yawMag0;  // offset slik at nåværende retning blir 0°
-    Serial.printf("🧭 Start yaw justert til %.1f° (mag)\n", yaw);
-  } else {
-    Serial.println("⚠️  Magnetometer ikke tilgjengelig for yaw-init");
-  }
-
   bool bmp_ok = bmp.begin_I2C();
   if (bmp_ok) {
     bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_2X);
@@ -213,9 +235,9 @@ void setup() {
     bmp.setOutputDataRate(BMP3_ODR_50_HZ);
     delay(300);
 
-    // Sett baro-nullpunkt automatisk ---
+    // Sett baro-nullpunkt automatisk
     if (bmp.performReading()) {
-      // Vent litt for å la sensoren stabilisere seg
+      // Vent for å la sensoren stabilisere seg
       delay(1000);
 
       // Les gjennomsnitt av flere målinger for et mer stabilt nullpunkt
@@ -228,66 +250,22 @@ void setup() {
       }
       bmp_p0_Pa = p_sum / N;
 
-      Serial.printf("🌍 Baro baseline satt: %.2f Pa (0 m)\n", bmp_p0_Pa);
+      Serial.printf("Baro baseline satt: %.2f Pa (0 m)\n", bmp_p0_Pa);
     }
-    z_est = 0.0f; v_est = 0.0f;
-    P00 = 10; P01 = 0; P10 = 0; P11 = 10;   // litt usikker start
-    R_baro = sigma_baro * sigma_baro;
   }
 
-  // --- Automatisk innendørs/utendørs-modus basert på trykkvariasjon ---
-  float p_samples[50];
-  const int Np = 50;
-  Serial.println("📡 Måler barotrykkstabilitet...");
-
-  for (int i = 0; i < Np; i++) {
-    bmp.performReading();
-    p_samples[i] = bmp.pressure;
-    delay(100);  // 50 sample → ~5 sek
-  }
-
-  // --- Juster første roll/pitch etter gravitasjon ---
-  sensors_event_t a, g, t;
-  icm.getEvent(&a, &g, &t);
-  roll  = rad2deg(atan2f(a.acceleration.y, a.acceleration.z));
-  pitch = rad2deg(atan2f(-a.acceleration.x,
-              sqrtf(a.acceleration.y*a.acceleration.y + a.acceleration.z*a.acceleration.z)));
-
-  // Beregn gjennomsnitt og standardavvik
-  float meanP = 0, varP = 0;
-  for (int i = 0; i < Np; i++) meanP += p_samples[i];
-  meanP /= Np;
-  for (int i = 0; i < Np; i++) varP += (p_samples[i] - meanP)*(p_samples[i] - meanP);
-  varP /= Np;
-  float sigmaP = sqrtf(varP);
-
-  if (sigmaP < 1.5f) {
-    // Innendørsmodus – rolig luft, høyere støy og sterkere filter
-    bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_63);
-    sigma_baro = 2.5f;   // øk usikkerhet (mindre vekt på baro)
-    Serial.printf("🏠 Innendørsmodus aktivert (σ=%.2f Pa)\n", sigmaP);
-  } else if (sigmaP < 5.0f) {
-    // Moderat miljø (f.eks. rolig utendørs)
-    bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_15);
-    sigma_baro = 1.8f;
-    Serial.printf("🌤️  Moderat modus aktivert (σ=%.2f Pa)\n", sigmaP);
-  } else {
-    // Utendørs / flyvning
-    bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_7);
-    sigma_baro = 1.2f;
-    Serial.printf("🚀 Utendørsmodus aktivert (σ=%.2f Pa)\n", sigmaP);
-  }
-  R_baro = sigma_baro * sigma_baro;
-
-  delay(5000);
-
-  // ---------- STARTVARIABLER ----------
+  // STARTVARIABLER
   stateStart = millis();
   lastMicros = micros();
+  alt_baro_prev = 0;
+  alt_baro_filt = 0;
+  vz_baro = 0;
+  vz_acc  = 0;
+  vz_filt = 0;
 }
 
 void loop() {
-  // ---------- Les sensorer ----------
+  // Les sensorer
   sensors_event_t adxlEv;
   adxl.getEvent(&adxlEv);  // m/s^2
 
@@ -296,167 +274,91 @@ void loop() {
 
   bool bmp_ok = bmp.performReading();   // oppdater BMP målinger
 
-  // ---------- dt ----------
+  // dt
   unsigned long now = micros();
   float dt = (now - lastMicros) / 1e6f;
   if (dt <= 0) dt = 0.001f;
   lastMicros = now;
 
-  // ---------- Oppdater magnetometer før filter ---------- 
-  sensors_event_t m;
-  lis3mdl.getEvent(&m);
+  // Gyro (rad/s) -> fjern offset -> deg/s
+  float gx = (icm_gyroEv.gyro.x - gyro_offset_x) * 57.2957795f;
+  float gy = (icm_gyroEv.gyro.y - gyro_offset_y) * 57.2957795f;
+  float gz = (icm_gyroEv.gyro.z - gyro_offset_z) * 57.2957795f;
 
-  // ---------- Madgwick update (gyro rad/s) ----------
-  filter.update(
-    icm_gyroEv.gyro.y - gyro_offset_y,    // yaw-akse (bytt rekkefølge)
-    icm_gyroEv.gyro.x - gyro_offset_x,    // pitch
-    -(icm_gyroEv.gyro.z - gyro_offset_z), // roll (negativ omvendt)
-    icm_accelEv.acceleration.y,
-    icm_accelEv.acceleration.x,
-    -icm_accelEv.acceleration.z,
-    m.magnetic.y, m.magnetic.x, -m.magnetic.z,
-    dt
-  );
+  // Roll/Pitch via komplementært filter (ICM-accel + gyro)
+  float rollAcc = rad2deg(atan2f(icm_accelEv.acceleration.y, icm_accelEv.acceleration.z));
+  float pitchAcc = rad2deg(atan2f(-icm_accelEv.acceleration.x,
+                         sqrtf(icm_accelEv.acceleration.y*icm_accelEv.acceleration.y +
+                               icm_accelEv.acceleration.z*icm_accelEv.acceleration.z)));
 
-  roll  = rad2deg(filter.getRoll());
-  pitch = rad2deg(filter.getPitch());
-  yaw   = rad2deg(filter.getYaw()) + yaw_offset;
+  roll  = alpha_rp * (roll  + gx * dt) + (1.0f - alpha_rp) * rollAcc;
+  pitch = alpha_rp * (pitch + gy * dt) + (1.0f - alpha_rp) * pitchAcc;
 
-  // ---------- ADXL375 akselerasjoner til CSV (i g) ----------
+  // Yaw: gyro-integrasjon + magnetometer-korreksjon
+  float yaw_gyro = wrap180(yaw + gz * dt);
+
+  float yawMagDeg;
+  bool haveMag = computeMagYawDeg(roll, pitch, yawMagDeg);
+  if (haveMag) {
+    // adaptiv vekt (0..1)
+    float trust = magTrust(yawMagDeg, yaw_gyro, dt);
+    // kraftig gyro-vekting for snappy respons; la magnetometer trekke sakte inn
+    const float beta = 0.02f * trust; // 0.0–0.02 → ~1–2% mag-vekting pr iterasjon
+    yaw = wrap180((1.0f - beta) * yaw_gyro + beta * yawMagDeg);
+  } else {
+    yaw = yaw_gyro;
+  }
+
+  // ADXL375 akselerasjoner til CSV (i g)
   // ADXL offsets er i m/s^2 slik at vi matcher getEvent()
   float ax_g = (adxlEv.acceleration.x - adxl_xOff) / g0;
   float ay_g = (adxlEv.acceleration.y - adxl_yOff) / g0;
   float az_g = (adxlEv.acceleration.z - adxl_zOff) / g0;
 
-  // ---------- Temperatur/Trykk/Høyde ----------
-  float temperatureC = bmp_ok ? (bmp.temperature + bmp_tOff) : temperatureAtHeight(alt_sim);
-  float pressurePa   = bmp_ok ? (bmp.pressure + bmp_pOff)   : pressureAtHeight(alt_sim);
-  float altitude_m   = 0.0f;
+  // Temperatur/Trykk/Høyde
+  static float temperatureC = 0.0f;
+  static float pressurePa   = 101325.0f;
+  static float altitude_m   = 0.0f;
 
-  if (bmp_ok && bmp_p0_Pa > 10000.0f) {
-    // standard barometrisk formel
-    altitude_m = 44330.0f * (1.0f - powf(pressurePa / bmp_p0_Pa, 0.1903f));
-  } else {
-    altitude_m = (float)alt_sim; // fallback til simulert alt
-  }
-
-  // ---------- NØYAKTIG HASTIGHETSBEREGNING MED KALMAN-FILTER ----------
-
-  // --- 1) Grav-kompensert vertikal aksel ---
-  float az = icm_accelEv.acceleration.z;
-  float g_comp = g0 * cosf(deg2rad(pitch)) * cosf(deg2rad(roll));
-  float az_lin = az - g_comp;
-
-  // Mild filtrering + dead-zone
-  static float az_filt = 0;
-  az_filt = 0.25f * az_lin + 0.75f * az_filt;
-  if (fabs(az_filt) < 0.05f) az_filt = 0.0f;
-
-  // --- 2) KF: PREDIKSJON ---
-  float F00 = 1.0f, F01 = dt;
-  float F10 = 0.0f, F11 = 1.0f;
-  float Bz0  = 0.5f * dt * dt;
-  float Bz1  = dt;
-
-  // Prosess-støy Q
-  float q_aa = sigma_acc * sigma_acc;
-  float q_vv = sigma_model_v * sigma_model_v;
-  float Q00 = Bz0*Bz0 * q_aa;
-  float Q01 = Bz0*Bz1 * q_aa;
-  float Q10 = Q01;
-  float Q11 = Bz1*Bz1 * q_aa + q_vv;
-
-  // Prediker tilstand
-  float z_pred = F00*z_est + F01*v_est + Bz0*az_filt;
-  float v_pred = F10*z_est + F11*v_est + Bz1*az_filt;
-
-  // Prediker kovarians
-  float P00p = F00*P00 + F01*P10;
-  float P01p = F00*P01 + F01*P11;
-  float P10p = F10*P00 + F11*P10;
-  float P11p = F10*P01 + F11*P11;
-  float P00pp = P00p*F00 + P01p*F01 + Q00;
-  float P01pp = P00p*F10 + P01p*F11 + Q01;
-  float P10pp = P10p*F00 + P11p*F01 + Q10;
-  float P11pp = P10p*F10 + P11p*F11 + Q11;
-
-  // --- 3) KF: OPPDATERING MED BARO-HØYDE ---
   if (bmp_ok) {
-    float y  = altitude_m - z_pred;   // innovasjon
-    float S  = P00pp + R_baro;        // innovasjonskovarians
-    float K0 = P00pp / S;             // gain (z)
-    float K1 = P10pp / S;             // gain (v)
+    temperatureC = bmp.temperature + bmp_tOff;
+    pressurePa   = bmp.pressure + bmp_pOff;
 
-    // Oppdater estimat
-    z_est = z_pred + K0 * y;
-    v_est = v_pred + K1 * y;
+    if (bmp_p0_Pa > 10000.0f) {
+      // standard barometrisk formel
+      altitude_m = 44330.0f * (1.0f - powf(pressurePa / bmp_p0_Pa, 0.1903f));
+    }
+  }
+  // else: behold siste temperatureC/pressurePa/altitude_m
 
-    // Oppdater kovarians
-    float P00n = (1 - K0)*P00pp;
-    float P01n = (1 - K0)*P01pp;
-    float P10n = -K1*P00pp + P10pp;
-    float P11n = -K1*P01pp + P11pp;
-    P00 = P00n; P01 = P01n; P10 = P10n; P11 = P11n;
-  } else {
-    // Ingen baro → kun prediksjon
-    z_est = z_pred; 
-    v_est = v_pred;
-    P00 = P00pp; P01 = P01pp; P10 = P10pp; P11 = P11pp;
+  // NØYAKTIG HASTIGHETSBEREGNING (baro + accel)
+
+  // Filtrer akselerasjon (fjern støy og gravitasjon) og integrer
+  static float az_filt = 0;
+  az_filt = 0.3f * ((icm_accelEv.acceleration.z) - g0) + 0.7f * az_filt;
+  vz_acc += az_filt * dt;
+
+  // Baro-basert vertikalhastighet (derivert høyde)
+  if (bmp_ok) {
+    float alt_lp_in = altitude_m;
+    if (alt_baro_filt == 0.0f) alt_baro_filt = alt_lp_in;  // init første måling
+    alt_baro_filt = 0.15f * alt_lp_in + 0.85f * alt_baro_filt;
+
+    // FIX: bruk fmaxf i stedet for max(dt, ...)
+    float raw_vz_baro = (alt_baro_filt - alt_baro_prev) / fmaxf(dt, 1e-3f);
+    alt_baro_prev = alt_baro_filt;
+
+    // Lavpass for å fjerne vibrasjoner
+    vz_baro = 0.25f * raw_vz_baro + 0.75f * vz_baro;
   }
 
-  // Raketten stått i ro i mer enn 2 sek? Sett hastighet og høyde lik 0
-  static unsigned long stillTimer = 0;
+  // Fusjonér baro og accel til endelig estimat
+  vz_filt = 0.75f * vz_baro + 0.25f * vz_acc;
 
-  float gx_dps = (icm_gyroEv.gyro.x - gyro_offset_x) * 57.29578f;
-  float gy_dps = (icm_gyroEv.gyro.y - gyro_offset_y) * 57.29578f;
-  float gz_dps = (icm_gyroEv.gyro.z - gyro_offset_z) * 57.29578f;
-
-  float a_norm = sqrtf(icm_accelEv.acceleration.x*icm_accelEv.acceleration.x +
-                      icm_accelEv.acceleration.y*icm_accelEv.acceleration.y +
-                      icm_accelEv.acceleration.z*icm_accelEv.acceleration.z);
-
-  bool gyro_quiet = (fabsf(gx_dps) < 1.0f && fabsf(gy_dps) < 1.0f && fabsf(gz_dps) < 1.0f);
-  bool accel_quiet = fabsf(a_norm - g0) < 0.08f*g0;     // |a|-norm nær 1 g
-  bool baro_quiet  = fabsf(altitude_m - z_est) < 0.15f; // måling≈estimat
-
-  // Nå er høyde og hastighet filtrert:
-  float altitude_est_m = z_est;
-  float vz_est_mps     = v_est;
-
-  // Høyde og hastighet = 0 når system i ro (ikke i LAUNCH)
-  bool onPad = (state == SYSTEM_CHECK || state == OPERATION_READY);
-
-  if (onPad) {
-    // HARD lock av KF-tilstand
-    z_est = 0.0f;
-    v_est = 0.0f;
-
-    // Reset kovarians (viktig!)
-    P00 = 0.5f;
-    P01 = 0.0f;
-    P10 = 0.0f;
-    P11 = 0.5f;
-
-    // Synk UI-variabler
-    altitude_est_m = 0.0f;
-    vz_est_mps     = 0.0f;
-  }
-
-  // Tiny output clamp (etter nulling)
-  if (fabsf(vz_est_mps) < 0.05f) vz_est_mps = 0.0f;
-  if (fabsf(altitude_est_m) < 0.05f) altitude_est_m = 0.0f;
-
-  // --- Smart deadzone: bruk KF-usikkerhet ---
-  float v_sigma = sqrtf(fmaxf(P11, 1e-6f));   // hastighetsstandardavvik
-  float v_thresh = 2.5f * v_sigma;            // ~99% konfidens
-  if (fabsf(v_est) < v_thresh) v_est = 0.0f;
-
-  // ---------- Flight-time (sekunder) ----------
+  // Flight-time (sekunder)
   float tSec = (state >= LIFT_OFF) ? (millis() - LIFT_OFFStart) / 1000.0f : 0.0f;
 
-  // =============================
   //       TILSTANDSMASKIN
-  // =============================
   switch (state) {
     case SYSTEM_CHECK:
       if (millis() - stateStart > 10000) {
@@ -465,56 +367,19 @@ void loop() {
       }
       break;
 
-    case OPERATION_READY: {
-      static int accelCounter = 0;
-      static int baroCounter  = 0;
-      static unsigned long quietTimer = 0;
-
-      // --- Total akselerasjon ---
-      float a_norm = sqrtf(
-        icm_accelEv.acceleration.x * icm_accelEv.acceleration.x +
-        icm_accelEv.acceleration.y * icm_accelEv.acceleration.y +
-        icm_accelEv.acceleration.z * icm_accelEv.acceleration.z
-      );
-
-      // Netto aksel (uten gravitasjon)
-      float a_net = fabsf(a_norm - g0);
-
-      // --- Arming: må ha vært helt rolig i 0.5 s ---
-      if (fabsf(v_est) > 0.3f || a_net > 0.5f)
-        quietTimer = millis();
-
-      bool stableBefore = (millis() - quietTimer > 500);
-
-      // --- Aksel-kriterium (NETTO) ---
-      if (a_net > 1.0f)          // 5 m/s² ≈ 0.5 g netto (konservativ start) // 5.0f
-        accelCounter++;
-      else
-        accelCounter = 0;
-
-      // --- Baro-kriterium ---
-      if (fabsf(v_est) > 2.0f || altitude_est_m > 3.0f)
-        baroCounter++;
-      else
-        baroCounter = 0;
-
-      // --- KOMBINERT OG KORREKT ---
-      //if (stableBefore && (accelCounter >= 8 || baroCounter >= 5)) { // 8 og 5
-      if (accelCounter >= 5) {
+    case OPERATION_READY:
+      // MÅ NOK TWEAKES
+      // Enkel launch-deteksjon: høy Z-acc (ADXL) eller BMP-stigning
+      if (az_g >= 1.60f || (bmp_ok && altitude_m > 3.0f)) {
         state = LIFT_OFF;
         LIFT_OFFStart = millis();
         stateStart = millis();
-
-        bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_7);
-        sigma_baro = 1.2f;
-        R_baro = sigma_baro * sigma_baro;
       }
       break;
-    }
-    
+
     case LIFT_OFF:
-      // Bytt til APOGEE ved høyde > 4500 m (enten fra BMP eller simulert)
-      if ((bmp_ok && altitude_m >= 4500.0f) || (!bmp_ok && alt_sim >= 4500)) {
+      // Bytt til APOGEE ved høyde > 4500 m
+      if (bmp_ok && altitude_m >= 4500.0f) {
         state = APOGEE;
         stateStart = millis();
       }
@@ -528,28 +393,48 @@ void loop() {
       }
       break;
 
-    case PARACHUTE_DEPLOY:
-      // Simulert fall – i ekte flight er det BMP som gir altitude/vel
-      if (!bmp_ok) {
-        vel_sim *= 0.9f;
-        if (vel_sim < 50) vel_sim = 50;
-        alt_sim -= 50;
-        if (alt_sim < 0) alt_sim = 0;
+    case PARACHUTE_DEPLOY: {
+      if (!parachuteFired) {
+        parachuteFired = true;
+        // TODO: fyr pyro / aktiver servo / release mekanisme
+        // digitalWrite(PYRO_PIN, HIGH); delay(150); digitalWrite(PYRO_PIN, LOW);
+        Serial.println("PARACHUTE: fired");
       }
+
+      // Denne lå etter break før (kjørte aldri) – nå kjører den.
+      vz_acc = 0.98f * vz_acc + 0.02f * vz_baro;
+
+      // Landing-detektering (denne lå også etter break før)
+      static unsigned long landingCandidateSince = 0;
+
+      const bool lowV = fabsf(vz_filt) < 1.0f;                 // m/s
+      const bool stableAlt = fabsf(altitude_m - alt_baro_prev) < 0.3f; // m pr loop-ish (du kan gjøre bedre)
+
+      if (lowV && stableAlt) {
+        if (landingCandidateSince == 0) landingCandidateSince = millis();
+        if (millis() - landingCandidateSince > 5000) {
+          // TODO: gå til LANDED state hvis du legger til en ny state
+          Serial.println("LANDED detected");
+        }
+      } else {
+        landingCandidateSince = 0;
+      }
+
       break;
+    }
   }
 
-  // ---------- JSON ved tilstandsendring ----------
+  // JSON ved tilstandsendring
   if (state != lastState) {
     Serial.print('{'); Serial.print("\"state\":"); Serial.print((int)state); Serial.println('}');
     Serial.flush();
-
     lastState = state;
   }
 
-  float vel_out   = vz_est_mps;  // hold som før; (valgfritt) legg inn barometrisk Vz-filter senere
-  float press_out = pressurePa / 101325.0f; // app viser "atm" – leverer i atm
-  long  alt_out   = (long)lroundf(altitude_est_m);
+  // CSV
+  float vel_out   = vz_filt;                // m/s (fusjonert baro + accel)
+  float press_out = pressurePa / 101325.0f; // atm (som dashboard forventer)
+  long  alt_out   = (long)altitude_m;       // meter fra BMP
 
   // Fiktiv posisjon – beholdt fra original
   long lat = 6039290 + (long)(seq * 2);
@@ -560,12 +445,12 @@ void loop() {
           temperatureC, vel_out, press_out,
           lat, lon, alt_out, (int)state);
 
-  // ---------- Oppdateringsfrekvens pr state ----------
+  // Oppdateringsfrekvens pr state
   switch (state) {
-    case SYSTEM_CHECK:      delay(100); break;
-    case OPERATION_READY:   delay(50); break;
-    case LIFT_OFF:          delay(5);  break; // raskere i flight for bedre respons
-    case APOGEE:            delay(10);  break;
-    case PARACHUTE_DEPLOY:  delay(10);  break;
+    case SYSTEM_CHECK:      delay(250); break;
+    case OPERATION_READY:   delay(100); break;
+    case LIFT_OFF:          delay(10);  break; // raskere i flight for bedre respons
+    case APOGEE:            delay(50);  break;
+    case PARACHUTE_DEPLOY:  delay(50);  break;
   }
 }
