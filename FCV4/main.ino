@@ -1,4 +1,4 @@
-// =========================
+// ========================
 // main.ino (UPDATED)
 // Fixes applied (from review):
 //  1) Removed duplicated baro "auto-mode" block in setup (and the buggy one).
@@ -7,7 +7,7 @@
 //  4) Removed redundant cal_isValid+cal_setDefaults in setup (cal_load already defaults).
 //     (Still prints whether EEPROM had valid calibration by peeking first.)
 //  5) Minor: renamed bmp_ok in setup to bmp_read_ok for clarity.
-// =========================
+// ========================
 
 #include <SPI.h>
 #include <Wire.h>
