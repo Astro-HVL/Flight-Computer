@@ -19,8 +19,8 @@ static inline void baroCompute(bool bmp_ok,
                               float &temperatureC, float &pressurePa, float &altitude_m)
 {
   if (bmp_ok) {
-    temperatureC = bmp_tempC + bmp_tOff;
-    pressurePa   = bmp_pressPa + bmp_pOff;
+    temperatureC = bmp_tempC;
+    pressurePa   = bmp_pressPa;
     altitude_m   = baroAltitudeFromPressure(pressurePa, bmp_p0_Pa);
   } else {
     // Failsafe hvis baro er nede: hold “siste gode” eller sett 0
