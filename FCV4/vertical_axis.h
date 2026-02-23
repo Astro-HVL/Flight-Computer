@@ -1,45 +1,53 @@
 #pragma once
-#include <Arduino.h>
-#include "globals.h"
+#include <math.h>
+#include "math_utils.h"   // deg2rad, rotMatrixZYX, matVec3
+#include <Adafruit_Sensor.h>
 
-static inline void emitCsv(float tSec, float ax_g, float ay_g, float az_g,
-                           float pitch_, float roll_, float yaw_,
-                           float temperature, float vel, float press,
-                           int drogueFired_, int mainFired_, long alt_m, long baro_alt_m, int state_)
+// Beregner tilt-kompensert vertikal aksel (world up) og netto-acc.
+// Input:
+//  - icmAcc: accelerometer event (m/s^2) i body frame
+//  - rollDeg, pitchDeg, yawDeg: attitude i grader (samme yaw du bruker for R)
+//  - g0: 9.80665
+// Output:
+//  - az_filt: filtrert vertikal aksel (m/s^2), positiv opp
+//  - a_norm: |a| (m/s^2)
+//  - a_net_filt: lavpass(|a|-g) for launch detect (m/s^2)
+static inline void verticalAxisUpdate(const sensors_event_t& icmAcc,
+                                      float rollDeg, float pitchDeg, float yawDeg,
+                                      float g0,
+                                      float& az_filt,
+                                      float& a_norm,
+                                      float& a_net_filt)
 {
-  Serial.print(tSec, 1);      Serial.print(',');
-  Serial.print(seq++);        Serial.print(',');
-  Serial.print(ax_g);         Serial.print(',');
-  Serial.print(ay_g);         Serial.print(',');
-  Serial.print(az_g, 1);      Serial.print(',');
-  Serial.print(pitch_, 1);    Serial.print(',');
-  Serial.print(roll_, 1);     Serial.print(',');
-  Serial.print(yaw_, 1);      Serial.print(',');
-  Serial.print(temperature);  Serial.print(',');
-  Serial.print(vel);          Serial.print(',');
-  Serial.print(press);        Serial.print(',');
-  Serial.print(drogueFired_); Serial.print(',');
-  Serial.print(mainFired_);   Serial.print(',');
-  Serial.print(alt_m);        Serial.print(',');
-  Serial.print(baro_alt_m);   Serial.print(',');
-  Serial.println(state_);
-}
+  // 1) Norm av akselerometer
+  const float ax = icmAcc.acceleration.x;
+  const float ay = icmAcc.acceleration.y;
+  const float az = icmAcc.acceleration.z;
 
-inline void delayByState() {
-  switch (state) {
-    case SYSTEM_CHECK:      delay(100); break;
-    case OPERATION_READY:   delay(50);  break;
-    case LIFT_OFF:          delay(5);   break;
+  a_norm = sqrtf(ax*ax + ay*ay + az*az);
 
-    // Etter liftoff trenger du fortsatt høy rate, men ikke ekstremt
-    case APOGEE:            delay(10);  break;
+  // 2) Roter til world (ZYX)
+  float Rbw[3][3];
+  rotMatrixZYX(rollDeg, pitchDeg, yawDeg, Rbw);
 
-    // Drogue/main-states
-    case DROGUE_DEPLOY:     delay(10);  break;
-    case DROGUE_DESCENT:    delay(20);  break;  // litt roligere logging
-    case MAIN_DEPLOY:       delay(10);  break;
-    case MAIN_DESCENT:      delay(20);  break;
+  float ax_w, ay_w, az_w;
+  matVec3(Rbw, ax, ay, az, ax_w, ay_w, az_w);
 
-    default:                delay(20);  break;
-  }
+  // 3) Lineær vertikal aksel: trekk fra g i world-up
+  const float az_lin = az_w - g0;
+
+  // 4) Mild LPF + deadzone (az_filt har intern tilstand)
+  static float az_state = 0.0f;
+  az_state = 0.25f * az_lin + 0.75f * az_state;
+  if (fabsf(az_state) < 0.05f) az_state = 0.0f;
+
+  az_filt = az_state;
+
+  // 5) Netto-acc for launch detect: |a|-g (lavpass)
+  const float a_net = fabsf(a_norm - g0);
+
+  static float a_net_state = 0.0f;
+  a_net_state = 0.2f * a_net + 0.8f * a_net_state;
+
+  a_net_filt = a_net_state;
 }
