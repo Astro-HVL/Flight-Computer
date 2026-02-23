@@ -71,31 +71,61 @@ static inline void kalmanVzUpdate(float dt,
     P00 = P00pp; P01 = P01pp; P10 = P10pp; P11 = P11pp;
   }
 
-  // -------- OnPad-lock --------
-  const bool gyro_quiet  = (fabsf(gx_dps) < 1.0f && fabsf(gy_dps) < 1.0f && fabsf(gz_dps) < 1.0f);
-  const bool accel_quiet = (fabsf(a_norm - g0) < 0.08f*g0);
-  const bool baro_quiet  = bmp_ok ? (fabsf(altitude_m - z_est) < 0.15f) : true;
-
+  // -------- OnPad-lock (KUN i SYSTEM_CHECK/OPERATION_READY) --------
   const bool onPad = (state == SYSTEM_CHECK || state == OPERATION_READY);
-  const bool stationary = gyro_quiet && accel_quiet && baro_quiet;
 
-  if (onPad && stationary) {
-    z_est = 0.0f;
-    v_est = 0.0f;
-    P00 = 0.5f; P01 = 0.0f; P10 = 0.0f; P11 = 0.5f;
-  } else if (onPad) {
-    z_est *= 0.98f;
-    v_est *= 0.98f;
+  // IMU-stillhet
+  const bool gyro_quiet  = (fabsf(gx_dps) < 1.0f && fabsf(gy_dps) < 1.0f && fabsf(gz_dps) < 1.0f);
+  const bool accel_quiet = (fabsf(a_norm - g0) < 0.08f * g0);
+  const bool imu_quiet   = gyro_quiet && accel_quiet;
+
+  // Baro "nær 0" gate (hindrer at du hard-locker mens du holder den løftet)
+  const bool baro_near_zero = (!bmp_ok) ? true : (fabsf(altitude_m) < 0.6f);
+
+  // Krev litt tid i ro før hard-lock
+  static unsigned long imuQuietSinceMs = 0;
+  const unsigned long nowMs = millis();
+
+  if (!onPad) {
+    // VIKTIG: reset alt pad-relatert når vi er i flight states
+    imuQuietSinceMs = 0;
+  } else {
+    if (imu_quiet) {
+      if (imuQuietSinceMs == 0) imuQuietSinceMs = nowMs;
+    } else {
+      imuQuietSinceMs = 0;
+    }
+
+    const bool stationary = imu_quiet && baro_near_zero &&
+                            (imuQuietSinceMs != 0) && ((nowMs - imuQuietSinceMs) > 400);
+
+    if (stationary) {
+      // Hard lock 0m KUN på pad
+      z_est = 0.0f;
+      v_est = 0.0f;
+      P00 = 0.5f; P01 = 0.0f; P10 = 0.0f; P11 = 0.5f;
+    } else {
+      // Myk pull-to-zero KUN hvis vi fortsatt er nær pad-høyde
+      if (bmp_ok && fabsf(altitude_m) < 0.6f) {
+        z_est *= 0.98f;
+        v_est *= 0.98f;
+      }
+    }
+
+    // (Valgfritt) Kosmetisk: unngå negative småhopp på bakken
+    if (z_est < 0.0f && fabsf(z_est) < 0.2f) z_est = 0.0f;
+    if (z_est < -0.5f) z_est = -0.5f;
   }
 
-  // output clamp / deadzone
+  // output clamp / deadzone (FIX: gjør deadzone før output)
+  const float v_sigma  = sqrtf(fmaxf(P11, 1e-6f));
+  if (onPad) {
+    const float v_thresh = 0.25f; // test 0.2–0.4
+    if (fabsf(v_est) < v_thresh) v_est = 0.0f;
+  }
+
   altitude_est_m = z_est;
   vz_est_mps     = v_est;
-
-  if (fabsf(vz_est_mps) < 0.05f) vz_est_mps = 0.0f;
+  
   if (fabsf(altitude_est_m) < 0.05f) altitude_est_m = 0.0f;
-
-  const float v_sigma  = sqrtf(fmaxf(P11, 1e-6f));
-  const float v_thresh = 2.5f * v_sigma;
-  if (fabsf(v_est) < v_thresh) v_est = 0.0f;
 }
