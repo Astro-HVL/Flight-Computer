@@ -63,15 +63,15 @@ static void baroApplyAutoModeFromSigma(float sigmaP) {
   if (sigmaP < 1.5f) {
     bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_63);
     sigma_baro = 2.5f;
-    Serial.printf("Innendørsmodus aktivert (σ=%.2f Pa)\n", sigmaP);
+    Serial.printf("Innendørsmodus aktivert (σ = %.2f Pa)\n", sigmaP);
   } else if (sigmaP < 5.0f) {
     bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_15);
     sigma_baro = 1.8f;
-    Serial.printf("Moderat modus aktivert (σ=%.2f Pa)\n", sigmaP);
+    Serial.printf("Moderat modus aktivert (σ = %.2f Pa)\n", sigmaP);
   } else {
     bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_7);
     sigma_baro = 1.2f;
-    Serial.printf("Utendørsmodus aktivert (σ=%.2f Pa)\n", sigmaP);
+    Serial.printf("Utendørsmodus aktivert (σ = %.2f Pa)\n", sigmaP);
   }
   R_baro = sigma_baro * sigma_baro;
 }
@@ -152,22 +152,52 @@ void setup() {
     // Bekreft at vi får data
     const bool bmp_read_ok = bmp.performReading();
 
-    if (bmp_read_ok) {
-      // Sett baro-nullpunkt automatisk (baseline p0)
-      delay(500);
+        if (bmp_read_ok) {
+
+      // -------------------------------
+      // (1) La sensoren stabilisere seg litt først
+      // -------------------------------
+      delay(800);
+
+      // -------------------------------
+      // (2) Auto indoor/moderate/outdoor basert på trykkstabilitet
+      //     (velger endelig IIR + sigma_baro/R_baro)
+      // -------------------------------
+      Serial.println("Måler barotrykkstabilitet...");
+      float sigmaP = 0.0f;
+      if (baroMeasureSigmaPa_Welford(bmp, 50, sigmaP)) {
+        baroApplyAutoModeFromSigma(sigmaP);
+      } else {
+        Serial.println("BMP: for mange ugyldige samples til stabilitetsmåling. Bruker default IIR=7.");
+        // behold IIR=7 som du satte tidligere
+        R_baro = sigma_baro * sigma_baro;
+      }
+
+      // -------------------------------
+      // (3) La ny IIR "sette seg"
+      // -------------------------------
+      delay(800);
+
+      // -------------------------------
+      // (4) Sett baro-nullpunkt (baseline p0) ETTER auto-mode
+      //     Flere samples + discard av de første
+      // -------------------------------
       float p_sum = 0.0f;
       int   p_cnt = 0;
-      const int N = 10;
+      const int N = 50;       // mer robust enn 10
+      const int DISCARD = 10; // kast de første
 
       for (int i = 0; i < N; i++) {
         if (bmp.performReading()) {
-          p_sum += bmp.pressure;
-          p_cnt++;
+          if (i >= DISCARD) {
+            p_sum += bmp.pressure;
+            p_cnt++;
+          }
         }
-        delay(80);
+        delay(50);
       }
 
-      if (p_cnt >= (N * 8) / 10) { // minst 80% gyldige
+      if (p_cnt >= 20) { // minst 20 gode
         bmp_p0_Pa = p_sum / (float)p_cnt;
         Serial.printf("Baro baseline satt: %.2f Pa (0 m)\n", bmp_p0_Pa);
 
@@ -175,15 +205,6 @@ void setup() {
         z_est = 0.0f; v_est = 0.0f;
         P00 = 10; P01 = 0; P10 = 0; P11 = 10;
         R_baro = sigma_baro * sigma_baro;
-
-        // ---------- Auto indoor/moderate/outdoor basert på trykkstabilitet ----------
-        Serial.println("Måler barotrykkstabilitet...");
-        float sigmaP = 0.0f;
-        if (baroMeasureSigmaPa_Welford(bmp, 50, sigmaP)) {
-          baroApplyAutoModeFromSigma(sigmaP);
-        } else {
-          Serial.println("BMP: for mange ugyldige samples til stabilitetsmåling. Hopper over auto-modus.");
-        }
 
       } else {
         Serial.println("BMP: for få gyldige samples til baseline. Fortsetter uten baro.");
@@ -213,7 +234,7 @@ void setup() {
   if (computeMagYawDeg(roll, pitch, yawMag0)) {
     yaw = yawMag0;
     yaw_offset = -yawMag0;
-    Serial.printf("Start yaw (mag tilt-comp) = %.1f°, yaw_offset=%.1f°\n", yawMag0, yaw_offset);
+    Serial.printf("Start yaw (mag tilt-comp) = %.1f°, yaw_offset = %.1f°\n", yawMag0, yaw_offset);
   } else {
     Serial.println("Magnetometer ikke tilgjengelig for yaw-init");
     yaw = 0.0f;
@@ -286,7 +307,7 @@ void loop() {
           pitch, roll, yaw_out,
           temperatureC, vel_out, press_out,
           drogueFired ? 1 : 0, mainFired ? 1 : 0,
-          alt_out, (int)state);
+          alt_out, altitude_m, (int)state);
 
   // ---------- Delay ----------
   delayByState();
