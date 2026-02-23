@@ -5,22 +5,23 @@
 static inline void emitCsv(float tSec, float ax_g, float ay_g, float az_g,
                            float pitch_, float roll_, float yaw_,
                            float temperature, float vel, float press,
-                           int drogueFired_, int mainFired_, long alt_m, int state_)
+                           int drogueFired_, int mainFired_, long alt_m, long baro_alt_m, int state_)
 {
-  Serial.print(tSec, 1);     Serial.print(',');
-  Serial.print(seq++);       Serial.print(',');
-  Serial.print(ax_g);        Serial.print(',');
-  Serial.print(ay_g);        Serial.print(',');
-  Serial.print(az_g, 1);     Serial.print(',');
-  Serial.print(pitch_, 1);   Serial.print(',');
-  Serial.print(roll_, 1);    Serial.print(',');
-  Serial.print(yaw_, 1);     Serial.print(',');
-  Serial.print(temperature); Serial.print(',');
-  Serial.print(vel);         Serial.print(',');
-  Serial.print(press);       Serial.print(',');
+  Serial.print(tSec, 1);      Serial.print(',');
+  Serial.print(seq++);        Serial.print(',');
+  Serial.print(ax_g);         Serial.print(',');
+  Serial.print(ay_g);         Serial.print(',');
+  Serial.print(az_g, 1);      Serial.print(',');
+  Serial.print(pitch_, 1);    Serial.print(',');
+  Serial.print(roll_, 1);     Serial.print(',');
+  Serial.print(yaw_, 1);      Serial.print(',');
+  Serial.print(temperature);  Serial.print(',');
+  Serial.print(vel);          Serial.print(',');
+  Serial.print(press);        Serial.print(',');
   Serial.print(drogueFired_); Serial.print(',');
   Serial.print(mainFired_);   Serial.print(',');
-  Serial.print(alt_m);       Serial.print(',');
+  Serial.print(alt_m);        Serial.print(',');
+  Serial.print(baro_alt_m);   Serial.print(',');
   Serial.println(state_);
 }
 
