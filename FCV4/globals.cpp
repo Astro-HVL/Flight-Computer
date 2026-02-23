@@ -23,8 +23,6 @@ float mag_xBias = 0, mag_yBias = 0, mag_zBias = 0;
 float mag_xScale = 1.0f, mag_yScale = 1.0f, mag_zScale = 1.0f;
 float decl_deg = 0.0f;
 float bmp_p0_Pa = 101325.0f;
-float bmp_tOff = 0.0f;
-float bmp_pOff = 0.0f;
 bool  bmp_present = false;
 
 // ATTITUDE
