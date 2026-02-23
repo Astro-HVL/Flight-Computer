@@ -37,8 +37,6 @@ extern float               mag_xBias, mag_yBias, mag_zBias;
 extern float               mag_xScale, mag_yScale, mag_zScale;
 extern float               decl_deg;
 extern float               bmp_p0_Pa;
-extern float               bmp_tOff;
-extern float               bmp_pOff;
 extern bool                bmp_present;
 
 
