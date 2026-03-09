@@ -5,7 +5,7 @@
 
 // Oppdaterer z_est/v_est og P.. basert på:
 //  - dt
-//  - az_filt (lineær vertikal aksel)
+//  - az_filt (lineær vertikal acc)
 //  - altitude_m (baro)
 //  - bmp_ok
 //  - state (for onPad logic)
@@ -20,7 +20,7 @@ static inline void kalmanVzUpdate(float dt,
                                   float& altitude_est_m,
                                   float& vz_est_mps)
 {
-  // -------- System model --------
+  // Systemmodell
   const float F00 = 1.0f, F01 = dt;
   const float F10 = 0.0f, F11 = 1.0f;
   const float Bz0 = 0.5f * dt * dt;
@@ -34,11 +34,11 @@ static inline void kalmanVzUpdate(float dt,
   const float Q10 = Q01;
   const float Q11 = Bz1*Bz1 * q_aa + q_vv;
 
-  // -------- Predict --------
+  // Prediksjon
   const float z_pred = F00*z_est + F01*v_est + Bz0*az_filt;
   const float v_pred = F10*z_est + F11*v_est + Bz1*az_filt;
 
-  // P pred
+  // P prediksjon
   const float P00p  = F00*P00 + F01*P10;
   const float P01p  = F00*P01 + F01*P11;
   const float P10p  = F10*P00 + F11*P10;
@@ -49,7 +49,7 @@ static inline void kalmanVzUpdate(float dt,
   const float P10pp = P10p*F00 + P11p*F01 + Q10;
   const float P11pp = P10p*F10 + P11p*F11 + Q11;
 
-  // -------- Update w/ baro --------
+  // Oppdater med barometer
   if (bmp_ok) {
     const float y = altitude_m - z_pred;
     const float S = P00pp + R_baro;
@@ -71,7 +71,7 @@ static inline void kalmanVzUpdate(float dt,
     P00 = P00pp; P01 = P01pp; P10 = P10pp; P11 = P11pp;
   }
 
-  // -------- OnPad-lock (KUN i SYSTEM_CHECK/OPERATION_READY) --------
+  // OnPad-lock (Kun i SYSTEM_CHECK/OPERATION_READY)
   const bool onPad = (state == SYSTEM_CHECK || state == OPERATION_READY);
 
   // IMU-stillhet
@@ -79,7 +79,7 @@ static inline void kalmanVzUpdate(float dt,
   const bool accel_quiet = (fabsf(a_norm - g0) < 0.08f * g0);
   const bool imu_quiet   = gyro_quiet && accel_quiet;
 
-  // Baro "nær 0" gate (hindrer at du hard-locker mens du holder den løftet)
+  // Baro-gating (nær 0) (hindrer hard-lock mens systemet er løftet)
   const bool baro_near_zero = (!bmp_ok) ? true : (fabsf(altitude_m) < 0.6f);
 
   // Krev litt tid i ro før hard-lock
@@ -100,24 +100,24 @@ static inline void kalmanVzUpdate(float dt,
                             (imuQuietSinceMs != 0) && ((nowMs - imuQuietSinceMs) > 400);
 
     if (stationary) {
-      // Hard lock 0m KUN på pad
+      // Hard lock 0 m KUN på pad
       z_est = 0.0f;
       v_est = 0.0f;
       P00 = 0.5f; P01 = 0.0f; P10 = 0.0f; P11 = 0.5f;
     } else {
-      // Myk pull-to-zero KUN hvis vi fortsatt er nær pad-høyde
+      // Myk pull-to-zero kun hvis vi fortsatt er nær pad-høyde
       if (bmp_ok && fabsf(altitude_m) < 0.6f) {
         z_est *= 0.98f;
         v_est *= 0.98f;
       }
     }
 
-    // (Valgfritt) Kosmetisk: unngå negative småhopp på bakken
+    // Soft-lock
     if (z_est < 0.0f && fabsf(z_est) < 0.2f) z_est = 0.0f;
     if (z_est < -0.5f) z_est = -0.5f;
   }
 
-  // output clamp / deadzone (FIX: gjør deadzone før output)
+  // output clamp / deadzone
   const float v_sigma  = sqrtf(fmaxf(P11, 1e-6f));
   if (onPad) {
     const float v_thresh = 0.25f; // test 0.2–0.4
