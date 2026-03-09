@@ -16,6 +16,7 @@ Adafruit_BMP3XX                   bmp;
 
 // CALIBRATION
 CalibrationData CAL;
+MotionCalData MCAL;
 
 float gyro_offset_x = 0, gyro_offset_y = 0, gyro_offset_z = 0;
 float adxl_xOff = 0, adxl_yOff = 0, adxl_zOff = 0;
@@ -28,7 +29,7 @@ bool  bmp_present = false;
 // ATTITUDE
 float roll = 0.0f, pitch = 0.0f, yaw = 0.0f;
 float yaw_offset = 0.0f;
-float alpha_rp = 0.98f;
+float alpha_rp = 0.95f; // Gjøres adaptiv? Høy alpha under flight, lav på bakken. 0.95 = 95% gyro, 5% accel
 unsigned long lastMicros = 0;
 
 // MISC
