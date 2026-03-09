@@ -25,18 +25,17 @@ static inline void emitCsv(float tSec, float ax_g, float ay_g, float az_g,
   Serial.println(state_);
 }
 
+// Må trolig gjøres annerledes
 inline void delayByState() {
   switch (state) {
     case SYSTEM_CHECK:      delay(100); break;
     case OPERATION_READY:   delay(50);  break;
     case LIFT_OFF:          delay(5);   break;
-
-    // Etter liftoff trenger du fortsatt høy rate, men ikke ekstremt
     case APOGEE:            delay(10);  break;
 
     // Drogue/main-states
     case DROGUE_DEPLOY:     delay(10);  break;
-    case DROGUE_DESCENT:    delay(20);  break;  // litt roligere logging
+    case DROGUE_DESCENT:    delay(20);  break;
     case MAIN_DEPLOY:       delay(10);  break;
     case MAIN_DESCENT:      delay(20);  break;
 
