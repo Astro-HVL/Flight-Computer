@@ -1,19 +1,7 @@
-// ========================
-// main.ino (UPDATED)
-// Fixes applied (from review):
-//  1) Removed duplicated baro "auto-mode" block in setup (and the buggy one).
-//  2) Made baro auto-mode robust (Welford online variance) INSIDE setup.
-//  3) verticalAxisUpdate now uses physical yaw (without yaw_offset), not yaw_out.
-//  4) Removed redundant cal_isValid+cal_setDefaults in setup (cal_load already defaults).
-//     (Still prints whether EEPROM had valid calibration by peeking first.)
-//  5) Minor: renamed bmp_ok in setup to bmp_read_ok for clarity.
-// ========================
-
 #include <SPI.h>
 #include <Wire.h>
 #include <EEPROM.h>
 #include <math.h>
-
 #include "globals.h"
 #include "math_utils.h"
 #include "mag_yaw.h"
@@ -24,12 +12,10 @@
 #include "baro_alt.h"
 #include "vertical_axis.h"
 #include "sensors.h"
+#include "motioncal_eeprom.h"
 
-// ---------------------------------------------------------
-// Robust baro stability measurement (online mean/variance)
-// Returns true if enough valid samples were collected.
-// Also outputs sigmaP (Pa).
-// ---------------------------------------------------------
+// Returnerer true hvis den får nok gyldige samples
+// sigmaP blir også oppdatert (Pa)
 static bool baroMeasureSigmaPa_Welford(Adafruit_BMP3XX &bmp, int Np, float &sigmaP_out) {
   int   n    = 0;
   float mean = 0.0f;
@@ -47,7 +33,7 @@ static bool baroMeasureSigmaPa_Welford(Adafruit_BMP3XX &bmp, int Np, float &sigm
     delay(100);
   }
 
-  // Require at least 80% valid
+  // Minst 80% gyldige samples
   if (n < (Np * 8) / 10) return false;
 
   const float var = (n > 1) ? (M2 / (float)n) : 0.0f;
@@ -55,14 +41,12 @@ static bool baroMeasureSigmaPa_Welford(Adafruit_BMP3XX &bmp, int Np, float &sigm
   return true;
 }
 
-// ---------------------------------------------------------
-// Apply your indoor/moderate/outdoor mode based on sigmaP.
-// Also updates sigma_baro + R_baro (KF measurement variance).
-// ---------------------------------------------------------
+// Innendørs, moderat eller utendørs modus basert på sigmaP
+// Oppdaterer sigma_baro og R_bare for kalmanfilter varians
 static void baroApplyAutoModeFromSigma(float sigmaP) {
   if (sigmaP < 1.5f) {
     bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_63);
-    sigma_baro = 2.5f;
+    sigma_baro = 1.2f;
     Serial.printf("Innendørsmodus aktivert (σ = %.2f Pa)\n", sigmaP);
   } else if (sigmaP < 5.0f) {
     bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_15);
@@ -70,7 +54,7 @@ static void baroApplyAutoModeFromSigma(float sigmaP) {
     Serial.printf("Moderat modus aktivert (σ = %.2f Pa)\n", sigmaP);
   } else {
     bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_7);
-    sigma_baro = 1.2f;
+    sigma_baro = 2.5f;
     Serial.printf("Utendørsmodus aktivert (σ = %.2f Pa)\n", sigmaP);
   }
   R_baro = sigma_baro * sigma_baro;
@@ -86,9 +70,7 @@ void setup() {
   Wire.setClock(400000);
   SPI.begin();
 
-  // ---------- LAST KALIBRERINGSVERDIER ----------
-  // NOTE: cal_load() already applies defaults if invalid.
-  // If you want correct logging about whether EEPROM was valid, we peek first.
+  // LAST KALIBRERINGSVERDIER
   CalibrationData tmpPeek;
   EEPROM.get(CAL_EEPROM_ADDR, tmpPeek);
   const bool hadValidCal = cal_isValid(tmpPeek);
@@ -98,6 +80,14 @@ void setup() {
                    ? F("EEPROM: Kalibrering lastet")
                    : F("EEPROM: Ingen gyldig kalibrering funnet. Bruker standardverdier."));
 
+  MotionCalData tmpMcalPeek;
+  EEPROM.get(MCAL_EEPROM_ADDR, tmpMcalPeek);
+  const bool hadValidMcal = mcal_isValid(tmpMcalPeek);
+  mcal_load(MCAL);
+  Serial.println(hadValidMcal
+                   ? F("EEPROM: MotionCal lastet")
+                   : F("EEPROM: MotionCal ugyldig/mangler. Bruker identity."));
+
   gyro_offset_x = CAL.gyroBias[0];
   gyro_offset_y = CAL.gyroBias[1];
   gyro_offset_z = CAL.gyroBias[2];
@@ -106,21 +96,22 @@ void setup() {
   adxl_yOff     = CAL.adxlBias[1] * g0;
   adxl_zOff     = CAL.adxlBias[2] * g0;
 
-  mag_xBias     = CAL.magOffset[0];
-  mag_yBias     = CAL.magOffset[1];
-  mag_zBias     = CAL.magOffset[2];
-  mag_xScale    = (CAL.magScale[0] > 0) ? 1.0f / CAL.magScale[0] : 1.0f;
-  mag_yScale    = (CAL.magScale[1] > 0) ? 1.0f / CAL.magScale[1] : 1.0f;
-  mag_zScale    = (CAL.magScale[2] > 0) ? 1.0f / CAL.magScale[2] : 1.0f;
 
-  Serial.println(F("------ EEPROM Data ------"));
+  Serial.println(F("EEPROM data"));
   Serial.printf("Gyro bias [rad/s]: %+0.6f %+0.6f %+0.6f\n", gyro_offset_x, gyro_offset_y, gyro_offset_z);
   Serial.printf("ADXL bias [m/s²]:  %+0.3f %+0.3f %+0.3f\n", adxl_xOff, adxl_yOff, adxl_zOff);
-  Serial.printf("Mag offset [uT]:   %+0.2f %+0.2f %+0.2f\n", mag_xBias, mag_yBias, mag_zBias);
-  Serial.printf("Mag scale inv:     %.3f %.3f %.3f\n", mag_xScale, mag_yScale, mag_zScale);
+  Serial.printf("MotionCal hard-iron [uT]: %+0.2f %+0.2f %+0.2f\n",
+                MCAL.magHardIron[0], MCAL.magHardIron[1], MCAL.magHardIron[2]);
+  Serial.printf("MotionCal soft-iron row0: %+0.6f %+0.6f %+0.6f\n",
+                MCAL.magSoftIron[0], MCAL.magSoftIron[1], MCAL.magSoftIron[2]);
+  Serial.printf("MotionCal soft-iron row1: %+0.6f %+0.6f %+0.6f\n",
+                MCAL.magSoftIron[3], MCAL.magSoftIron[4], MCAL.magSoftIron[5]);
+  Serial.printf("MotionCal soft-iron row2: %+0.6f %+0.6f %+0.6f\n",
+                MCAL.magSoftIron[6], MCAL.magSoftIron[7], MCAL.magSoftIron[8]);
+  Serial.printf("MotionCal field [uT]: %+0.2f\n", MCAL.magField);
   Serial.println(F("-------------------------"));
 
-  // ---------- SENSORINIT ----------
+  // SENSORINIT
   if (!icm.begin_SPI(CS_ICM, &SPI)) {
     while (1) { Serial.println("ICM20649 init fail"); delay(500); }
   }
@@ -139,7 +130,7 @@ void setup() {
     lis3mdl.setOperationMode(LIS3MDL_CONTINUOUSMODE);
   }
 
-  // --- BMP init: present vs reading ok ---
+  // BMP init: present vs reading ok
   bmp_present = bmp.begin_I2C();
 
   if (bmp_present) {
@@ -152,40 +143,30 @@ void setup() {
     // Bekreft at vi får data
     const bool bmp_read_ok = bmp.performReading();
 
-        if (bmp_read_ok) {
-
-      // -------------------------------
+    if (bmp_read_ok) {
       // (1) La sensoren stabilisere seg litt først
-      // -------------------------------
       delay(800);
 
-      // -------------------------------
       // (2) Auto indoor/moderate/outdoor basert på trykkstabilitet
-      //     (velger endelig IIR + sigma_baro/R_baro)
-      // -------------------------------
+      // (velger endelig IIR + sigma_baro/R_baro)
       Serial.println("Måler barotrykkstabilitet...");
       float sigmaP = 0.0f;
       if (baroMeasureSigmaPa_Welford(bmp, 50, sigmaP)) {
         baroApplyAutoModeFromSigma(sigmaP);
       } else {
         Serial.println("BMP: for mange ugyldige samples til stabilitetsmåling. Bruker default IIR=7.");
-        // behold IIR=7 som du satte tidligere
         R_baro = sigma_baro * sigma_baro;
       }
 
-      // -------------------------------
       // (3) La ny IIR "sette seg"
-      // -------------------------------
       delay(800);
 
-      // -------------------------------
       // (4) Sett baro-nullpunkt (baseline p0) ETTER auto-mode
-      //     Flere samples + discard av de første
-      // -------------------------------
+      // Flere samples + discard av de første
       float p_sum = 0.0f;
       int   p_cnt = 0;
-      const int N = 50;       // mer robust enn 10
-      const int DISCARD = 10; // kast de første
+      const int N = 50;
+      const int DISCARD = 10; // ignorér de 10 første
 
       for (int i = 0; i < N; i++) {
         if (bmp.performReading()) {
@@ -208,19 +189,19 @@ void setup() {
 
       } else {
         Serial.println("BMP: for få gyldige samples til baseline. Fortsetter uten baro.");
-        bmp_present = false; // "disable"
+        bmp_present = false;
       }
 
     } else {
       Serial.println("BMP: performReading() feilet i setup. Fortsetter uten baro.");
-      bmp_present = false; // "disable"
+      bmp_present = false;
     }
 
   } else {
     Serial.println("BMP: ikke funnet (begin_I2C feilet). Fortsetter uten baro.");
   }
 
-  // ---------- Første roll/pitch fra gravitasjon ----------
+  // Første roll/pitch fra gravitasjon
   sensors_event_t a0, g0ev, t0;
   icm.getEvent(&a0, &g0ev, &t0);
   roll  = rad2deg(atan2f(a0.acceleration.y, a0.acceleration.z));
@@ -228,7 +209,7 @@ void setup() {
                          sqrtf(a0.acceleration.y * a0.acceleration.y +
                                a0.acceleration.z * a0.acceleration.z)));
 
-  // ---------- Initial yaw alignment (tilt-kompensert mag) ----------
+  // Initial yaw alignment (tilt-kompensert mag)
   delay(200);
   float yawMag0 = 0.0f;
   if (computeMagYawDeg(roll, pitch, yawMag0)) {
@@ -246,69 +227,53 @@ void setup() {
 }
 
 void loop() {
-  // Les sensorer (inkl bmp snapshot bare én gang pr loop)
+  // Les sensorer (snapshot én gang per loop)
   SensorFrame s = readSensors();
 
-  // ---------- Gyro (rad/s -> deg/s) + yaw_out ----------
+  // Gyro (rad/s -> deg/s) + yaw_out
   float gx_dps = 0.0f, gy_dps = 0.0f, gz_dps = 0.0f;
   float yaw_out = 0.0f;
 
   attitudeUpdate(s.dt, s.icm_acc, s.icm_gyro, gx_dps, gy_dps, gz_dps, yaw_out);
 
-  // ---------- ADXL375 til CSV (i g) ----------
+  // ADXL375 til CSV (i g)
   const float ax_g = (s.adxl.acceleration.x - adxl_xOff) / g0;
   const float ay_g = (s.adxl.acceleration.y - adxl_yOff) / g0;
   const float az_g = (s.adxl.acceleration.z - adxl_zOff) / g0;
 
-  // ---------- Temperatur/Trykk/Høyde ----------
+  // Temperatur/Trykk/Høyde
   float temperatureC = 0.0f;
   float pressurePa   = 0.0f;
   float altitude_m   = 0.0f;
-  baroCompute(s.bmp_ok, s.bmp_tempC, s.bmp_pressPa,
-              temperatureC, pressurePa, altitude_m);
+  baroCompute(s.bmp_ok, s.bmp_tempC, s.bmp_pressPa, temperatureC, pressurePa, altitude_m);
 
-  // =========================================================
   //   Vertical axis
-  // =========================================================
   float az_filt    = 0.0f;
   float a_norm     = 0.0f;
   float a_net_filt = 0.0f;
 
-  // IMPORTANT FIX:
-  // Use physical yaw (no offset) for rotation; yaw_out is for logging/UI.
-  verticalAxisUpdate(s.icm_acc, roll, pitch, yaw, g0,
-                     az_filt, a_norm, a_net_filt);
+  verticalAxisUpdate(s.icm_acc, roll, pitch, yaw, g0, az_filt, a_norm, a_net_filt);
 
-  // =========================================================
-  //   Kalman VZ
-  // =========================================================
+  //   Kalman
   float altitude_est_m = 0.0f;
   float vz_est_mps     = 0.0f;
 
-  kalmanVzUpdate(s.dt, az_filt, altitude_m, s.bmp_ok,
-                 gx_dps, gy_dps, gz_dps,
-                 a_norm,
-                 altitude_est_m, vz_est_mps);
+  kalmanVzUpdate(s.dt, az_filt, altitude_m, s.bmp_ok, gx_dps, gy_dps, gz_dps, a_norm, altitude_est_m, vz_est_mps);
 
-  // ---------- Flight-time ----------
+  // Flight-time
   const float tSec = (state >= LIFT_OFF) ? (millis() - LIFT_OFFStart) / 1000.0f : 0.0f;
 
-  // =========================================================
   //   FSM
-  // =========================================================
   fsmUpdate(s.bmp_ok, altitude_m, a_net_filt);
 
-  // ---------- CSV ----------
+  // CSV
   const float vel_out   = vz_est_mps;
   const float press_out = (pressurePa > 0.0f) ? (pressurePa / 101325.0f) : 0.0f;
   const long  alt_out   = (long)lroundf(altitude_est_m);
 
-  emitCsv(tSec, ax_g, ay_g, az_g,
-          pitch, roll, yaw_out,
-          temperatureC, vel_out, press_out,
-          drogueFired ? 1 : 0, mainFired ? 1 : 0,
-          alt_out, altitude_m, (int)state);
+  emitCsv(tSec, ax_g, ay_g, az_g, pitch, roll, yaw_out, temperatureC, vel_out, press_out,
+  drogueFired ? 1 : 0, mainFired ? 1 : 0, alt_out, altitude_m, (int)state);
 
-  // ---------- Delay ----------
+  // Delay
   delayByState();
 }
