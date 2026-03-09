@@ -11,9 +11,6 @@ struct CalibrationData {
   uint16_t reserved;
   float gyroBias[3];
   float adxlBias[3];
-  float magOffset[3];
-  float magScale[3];
-  float baroRef_hPa;
   uint32_t crc32;
 };
 
@@ -27,8 +24,6 @@ inline void cal_setDefaults(CalibrationData& c) {
   memset(&c, 0, sizeof(c));
   c.magic   = CAL_MAGIC;
   c.version = CAL_VERSION;
-  c.magScale[0] = c.magScale[1] = c.magScale[2] = 1.0f;
-  c.baroRef_hPa = 1013.25f;
 }
 
 inline void cal_load(CalibrationData& c) {
