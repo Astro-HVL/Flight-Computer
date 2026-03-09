@@ -2,56 +2,45 @@
 #include <math.h>
 #include "globals.h"
 
-// ==========================================================
-//                 TUNING: APOGEE DETECT
-// ==========================================================
-// Sikringer:
+// TUNING: APOGEE DETECT
+// Sikringer
 static const unsigned long APOGEE_MIN_TIME_MS   = 5000;   // 4 km rakett: ikke apogee før 5s etter liftoff
-static const float         APOGEE_MIN_ALT_M     = 100.0f; // må være >100 m før apogee kan trigges
+static const float         APOGEE_MIN_ALT_M     = 100.0f; // må være > 100 m før apogee kan trigges
 
-// Toppunkt-detektering:
+// Toppunkt-detektering
 static const float         APOGEE_DROP_M        = 10.0f;  // må falle minst 10 m fra maks
 static const float         APOGEE_VNEG_MPS      = 2.0f;   // v_est < -2.0 m/s
-static const unsigned long APOGEE_VNEG_MS       = 400;    // må være negativ i 400 ms
+static const unsigned long APOGEE_VNEG_MS       = 500;    // må være negativ i 500 ms
 
-// Failsafe: hvis alt annet feiler (tilpass rakettprofil)
-static const unsigned long APOGEE_MAX_TIME_MS   = 25000;  // 25s etter liftoff: gå videre uansett (robust)
+// Failsafe: hvis alt annet feiler
+static const unsigned long APOGEE_MAX_TIME_MS   = 15000;  // 15s etter liftoff: gå videre uansett
 
-// ==========================================================
-//                 TUNING: DROGUE / MAIN
-// ==========================================================
+// TUNING: DROGUE / MAIN
 // Drogue: typisk kort hold etter apogee før pyro
-static const unsigned long DROGUE_HOLD_MS       = 600;    // 0.6s etter apogee-detektering
+static const unsigned long DROGUE_HOLD_MS       = 600;    // 0.6 s etter apogee-detektering
 static const float         DROGUE_MIN_ALT_M     = 200.0f; // ekstra sperre (for 4km kan dette være 0–200)
 
-// Main: deploy-høyde AGL (bruk KF z_est).
+// Main: deploy-høyde (bruk KF z_est).
 static const float         MAIN_DEPLOY_ALT_M    = 600.0f; 
 
 // Stabilitet: må være under terskel en liten stund før main
 static const unsigned long MAIN_HOLD_MS         = 300;    // 300 ms under terskel
 
 // Failsafe for main: hvis du aldri kommer under terskel (sensorfeil/estimatfeil)
-// (Typisk: 60–120s etter drogue, avhengig av drogue synk)
+// (Typisk: 60–120 s etter drogue, avhengig av drogue synk)
 static const unsigned long MAIN_FAILSAFE_MS     = 90000;  // 90s etter drogue-descent start
 
-// ==========================================================
-//                 Helper: safe comparisons
-// ==========================================================
+// Helper: safe comparisons
 static inline bool isFinitef(float x) { return !(isnan(x) || isinf(x)); }
 
-// ==========================================================
-//                 FSM UPDATE
-// ==========================================================
+// FSM UPDATE
 static inline void fsmUpdate(bool bmp_ok, float altitude_m, float a_net_filt)
 {
   (void)bmp_ok;      // vi bruker primært z_est/v_est, men lar param stå (ryddig API)
-  (void)altitude_m;  // kan brukes senere for ekstra sanity-check hvis du vil
+  (void)altitude_m;  // kan brukes senere for ekstra sanity-check
 
   switch (state) {
-
-    // ---------------------------
     // SYSTEM_CHECK -> READY
-    // ---------------------------
     case SYSTEM_CHECK:
       if (millis() - stateStart > 10000) {
         state = OPERATION_READY;
@@ -59,9 +48,7 @@ static inline void fsmUpdate(bool bmp_ok, float altitude_m, float a_net_filt)
       }
       break;
 
-    // ---------------------------
     // READY: launch detect + arming
-    // ---------------------------
     case OPERATION_READY: {
       static int normCnt = 0;
       static int hardCnt = 0;
@@ -106,9 +93,7 @@ static inline void fsmUpdate(bool bmp_ok, float altitude_m, float a_net_filt)
       break;
     }
 
-    // ---------------------------
     // LIFT_OFF: robust apogee detection
-    // ---------------------------
     case LIFT_OFF: {
       static float maxZ = -1e9f;
       static unsigned long negVStart = 0;
@@ -141,10 +126,9 @@ static inline void fsmUpdate(bool bmp_ok, float altitude_m, float a_net_filt)
 
       const bool apogeeDetected = timeOk && altOk && droppedFromPeak && vNegLongEnough;
 
-      // Timeout (ikke bindet til altOk, ellers kan du bli stuck hvis maxZ aldri blir “stor nok” pga feil)
-      const bool apogeeTimeout  = (tSinceLift >= APOGEE_MAX_TIME_MS) && timeOk;
+      //const bool apogeeTimeout  = (tSinceLift >= APOGEE_MAX_TIME_MS) && timeOk;
 
-      if (apogeeDetected || apogeeTimeout) {
+      if (apogeeDetected /*|| apogeeTimeout*/) {
         state = APOGEE;
         stateStart = millis();
 
@@ -155,13 +139,11 @@ static inline void fsmUpdate(bool bmp_ok, float altitude_m, float a_net_filt)
       break;
     }
 
-    // ---------------------------
-    // APOGEE: short hold, then drogue deploy
-    // ---------------------------
+    // APOGEE: kort hold, så drogue deploy
     case APOGEE: {
       const unsigned long tInApogee = millis() - stateStart;
 
-      // Bruk z_est (robust). Hvis den blir NaN av en eller annen grunn, ikke blokker alt.
+      // Hvis z_est blir NaN av en eller annen grunn, ikke blokker alt
       const float alt = z_est;
       const bool altOk = !isFinitef(alt) ? true : (alt >= DROGUE_MIN_ALT_M);
 
@@ -172,23 +154,19 @@ static inline void fsmUpdate(bool bmp_ok, float altitude_m, float a_net_filt)
       break;
     }
 
-    // ---------------------------
-    // DROGUE_DEPLOY: fire drogue once
-    // ---------------------------
+    // DROGUE_DEPLOY
     case DROGUE_DEPLOY:
       if (!drogueFired) {
         drogueFired = true;
         Serial.println("DROGUE: fired");
-        // TODO: Sett din pyro-pin HIGH her (drogue), evt. med pulse/timer
+        // TODO: Sett pyro-pin HIGH her (drogue), evt. med pulse/timer
       }
       // Gå videre direkte
       state = DROGUE_DESCENT;
       stateStart = millis();
       break;
 
-    // ---------------------------
     // DROGUE_DESCENT: wait until main altitude, then main deploy
-    // ---------------------------
     case DROGUE_DESCENT: {
       static unsigned long belowMainStart = 0;
       const unsigned long tSinceDrogue = millis() - stateStart;
@@ -226,24 +204,20 @@ static inline void fsmUpdate(bool bmp_ok, float altitude_m, float a_net_filt)
       break;
     }
 
-    // ---------------------------
     // MAIN_DEPLOY: fire main once
-    // ---------------------------
     case MAIN_DEPLOY:
       if (!mainFired) {
         mainFired = true;
         Serial.println("MAIN: fired");
-        // TODO: Sett din pyro-pin HIGH her (main), evt. med pulse/timer
+        // TODO: Sett pyro-pin HIGH her (main), evt. med pulse/timer
       }
       state = MAIN_DESCENT;
       stateStart = millis();
       break;
 
-    // ---------------------------
     // MAIN_DESCENT: end state
-    // ---------------------------
     case MAIN_DESCENT:
-      // Her kan du evt. legge inn “landing detect” og logging.
+      // Evt. legge inn “landing detect” og logging
       break;
 
     default:
