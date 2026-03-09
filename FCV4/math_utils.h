@@ -16,7 +16,7 @@ static inline float clampf(float x, float lo, float hi){
   return x;
 }
 
-// --- Tilt-kompensasjon: rotasjonsmatrise body->world (ZYX: yaw->pitch->roll) ---
+// Tilt-kompensasjon: rotasjonsmatrise body->world (ZYX: yaw->pitch->roll)
 static inline void rotMatrixZYX(float rollDeg, float pitchDeg, float yawDeg, float R[3][3]) {
   const float cr = cosf(deg2rad(rollDeg));
   const float sr = sinf(deg2rad(rollDeg));
