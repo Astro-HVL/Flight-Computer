@@ -3,6 +3,10 @@
 #include "math_utils.h"   // deg2rad, rotMatrixZYX, matVec3
 #include <Adafruit_Sensor.h>
 
+// Tilt-kompenserer akselerometeret ved å rotere målingene til world frame,
+// trekker fra 1g for å få lineær vertikal akselerasjon og filtrerer signalet
+// I tillegg beregnes |a|-g som et robust launch-detect signal
+
 // Beregner tilt-kompensert vertikal aksel (world up) og netto-acc.
 // Input:
 //  - icmAcc: accelerometer event (m/s^2) i body frame
